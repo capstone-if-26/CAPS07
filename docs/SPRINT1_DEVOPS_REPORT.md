@@ -58,7 +58,6 @@ Analisis kebutuhan dan uji coba arsitektur sistem untuk memastikan pilihan tekno
 - Dimensi: `1536` — sesuai model embedding `text-embedding-3-small`
 - Metric: `cosine`, Mode: Serverless
 - Region: AWS ap-southeast-1 (Singapore)
-- Index siap diisi embeddings di Sprint 2
 
 ### Hosting — Vercel
 
