@@ -24,3 +24,89 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+.hero{
+  position:relative;
+  height:82vh;
+  background-image:url('/hero-bg.jpg');
+  background-size:cover;
+  background-position:center;
+  overflow:hidden;
+}
+
+.heroOverlay{
+  position:absolute;
+  top:0;
+  left:0;
+  height:100%;
+  width:55%;
+
+  background:linear-gradient(
+    90deg,
+    rgba(140,0,0,0.95) 0%,
+    rgba(140,0,0,0.75) 40%,
+    rgba(140,0,0,0) 100%
+  );
+
+  display:flex;
+  align-items:center;
+}
+
+.heroText{
+  color:white;
+  margin-left:120px;
+}
+
+.heroText h1{
+  font-size:52px;
+  font-weight:700;
+  line-height:1.15;
+}
+
+.heroBtn{
+  margin-top:20px;
+  padding:10px 22px;
+  border-radius:25px;
+  border:1px solid white;
+  background:transparent;
+  color:white;
+  font-size:14px;
+  cursor:pointer;
+}
+
+.arrowLeft,
+.arrowRight{
+  position:absolute;
+  top:50%;
+  transform:translateY(-50%);
+  font-size:40px;
+  color:white;
+  cursor:pointer;
+}
+
+.arrowLeft{
+  left:80px;
+}
+
+.arrowRight{
+  right:80px;
+}
+
+.heroBanner{
+  position:absolute;
+  bottom:30px;
+  left:50%;
+  transform:translateX(-50%);
+
+  background:#b30f0f;
+  color:white;
+
+  padding:16px 36px;
+
+  border-radius:18px;
+
+  box-shadow:0 8px 18px rgba(0,0,0,0.3);
+
+  font-size:14px;
+}
+
