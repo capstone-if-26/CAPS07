@@ -149,7 +149,7 @@ export default function FloatingMenu() {
 
                 {/* Header Chat */}
                 <div className="bg-[#a11212] text-white px-2 py-1.5 flex items-center gap-2 font-semibold text-[12px] rounded-md flex-shrink-0">
-                  <Image src="/ikon-botcht.png" alt="bot" width={16} height={16} />
+                  <Image src="/ikon-chtbot.png" alt="bot" width={16} height={16} />
                   <span className="flex-1">Sahabat Keuangan</span>
                 </div>
 
@@ -159,7 +159,7 @@ export default function FloatingMenu() {
                   {/* TITLE */}
                   <div className="flex items-center gap-1.5 text-[10px] font-semibold text-[#a11212] flex-shrink-0">
                     <Image
-                      src="/ikon-botcht.png"
+                      src="/ikon-chtbot.png"
                       alt="bot"
                       width={13}
                       height={13}

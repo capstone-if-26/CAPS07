@@ -40,7 +40,8 @@ jobs:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           PINECONE_API_KEY: ${{ secrets.PINECONE_API_KEY }}
-          PINECONE_INDEX_NAME: ojk-staging
+          PINECONE_INDEX_NAME: ojk-chatbot
+          HF_API_KEY: ${{ secrets.HF_API_KEY }}
 
       - name: Build check
         run: npm run build
@@ -48,4 +49,5 @@ jobs:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           PINECONE_API_KEY: ${{ secrets.PINECONE_API_KEY }}
-          PINECONE_INDEX_NAME: ojk-staging
+          PINECONE_INDEX_NAME: ojk-chatbot
+          HF_API_KEY: ${{ secrets.HF_API_KEY }}
