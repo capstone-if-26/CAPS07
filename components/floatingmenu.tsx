@@ -87,7 +87,7 @@ export default function FloatingMenu() {
           onClick={() => setOpenChat(!openChat)}
           className="w-10 h-10 rounded-full bg-[#a11212] flex items-center justify-center cursor-pointer shadow-md"
         >
-          <Image src="/ikon-robot.png" alt="chatbot" width={20} height={20} />
+          <Image src="/avatar-bot.png" alt="chatbot" width={39} height={39} />
         </div>
 
         <Image src="/ikon-wa2.png" alt="wa" width={39} height={39} />
