@@ -171,6 +171,7 @@ export default function FloatingMenu() {
                 )}
             </div>
 
+
             {/* Background merah */}
             <div className="bg-[#850C12] h-full flex items-start justify-center pt-4 sm:bg-transparent sm:block">
 
