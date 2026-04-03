@@ -192,8 +192,8 @@ export default function FloatingMenu() {
               >
 
                 {/* Header Chat */}
-                <div className="bg-[#a11212] text-white px-2 py-1.5 flex items-center gap-2 font-semibold text-[12px] rounded-md flex-shrink-0">
-                  <Image src="/ikon-chtbotnew.png" alt="bot" width={16} height={16} />
+                <div className="bg-[#a11212] text-white px-2 py-1.5 flex items-center gap-2 font-semibold text-[13px] rounded-md flex-shrink-0">
+                  <Image src="/ikon-chtbotnew.png" alt="bot" width={19} height={19} />
                   <span className="flex-1">Sahabat Keuangan</span>
 
                   {/* Ikon close */}
@@ -213,7 +213,7 @@ export default function FloatingMenu() {
                   className="chat-scroll mt-2 flex-1 overflow-y-auto space-y-3 flex flex-col pr-1">
                 
                   {/* TITLE */}
-                  <div className="flex items-center gap-1.5 text-[10px] font-semibold text-[#a11212] flex-shrink-0">
+                  <div className="flex items-center gap-1.5 text-[11px] font-semibold text-[#a11212] flex-shrink-0">
                     <Image
                       src="/ikon-chtbot2.png"
                       alt="bot"
@@ -225,7 +225,7 @@ export default function FloatingMenu() {
                   </div>
 
                   {/* chat bubble */}
-                  <div className="bg-[#f3f3f3] text-black border border-[#a11212] rounded-md p-1.5 max-w-[85%] text-[8px] leading-tight mx-auto font-semibold flex-shrink-0">
+                  <div className="bg-[#f3f3f3] text-black border border-[#a11212] rounded-md p-1.5 max-w-[85%] text-[11px] leading-tight mx-auto font-semibold flex-shrink-0">
                     Hai Sobat OJK! 👋 <br />
                     Kamu sekarang sudah terhubung dengan layanan resmi Otoritas Jasa Keuangan.<br /><br />
                     Kenalin, aku ROJAK (Robot Penjawab Kontak OJK) yang siap bantu kamu 😊<br /><br />
@@ -240,7 +240,7 @@ export default function FloatingMenu() {
                         <button
                           key={i}
                           onClick={() => handleSend(label)}
-                          className="bg-[#a11212] text-white text-[6px] px-1.5 py-[2px] rounded w-[49%] hover:bg-[#8a0f0f] transition-colors"
+                          className="bg-[#a11212] text-white text-[9px] px-1.5 py-[2px] rounded w-[49%] hover:bg-[#8a0f0f] transition-colors"
                         >
                           {label}
                         </button>
@@ -253,7 +253,7 @@ export default function FloatingMenu() {
                     {messages.map((msg, i) => (
                       <div key={i} className="max-w-[85%] mx-auto flex flex-col">
                         <div
-                          className={`inline-block p-1.5 rounded-md text-[8px] leading-tight font-semibold max-w-full break-words ${
+                          className={`inline-block p-1.5 rounded-md text-[11px] leading-tight font-semibold max-w-full break-words ${
                             msg.sender === "user"
                               ? "bg-[#a11212] text-white self-end border border-[#a11212] dark:bg-[#a11212] dark:text-white"
                               : "bg-[#f3f3f3] text-black dark:text-black self-start border border-[#a11212] dark:bg-[#f3f3f3] dark:text-black"
@@ -309,7 +309,7 @@ export default function FloatingMenu() {
 
                   <button
                     onClick={() => handleSend()}
-                    className="bg-[#a11212] text-white px-2 py-1 rounded text-[10px]"
+                    className="bg-[#a11212] text-white px-2 py-1 rounded text-[10px] font-semibold"
                   >
                     Kirim
                   </button>
