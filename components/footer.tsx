@@ -1,10 +1,9 @@
 export default function Footer() {
   return (
-    <footer className="mt-16 sm:mt-20">
+    <footer>
       {/* TOP SECTION */}
       <div className="bg-gradient-to-r from-[#1f1f1f] to-[#5a5555] text-white">
         <div className="max-w-[1200px] mx-auto px-5 sm:px-6 py-8 sm:py-10">
-          {/* Mobile: 1 kolom, Tablet: 2 kolom, Desktop: 3 kolom */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8 lg:gap-10">
 
             {/* LEFT */}
@@ -49,5 +48,5 @@ export default function Footer() {
         </div>
       </div>
     </footer>
-  );
+  )
 }

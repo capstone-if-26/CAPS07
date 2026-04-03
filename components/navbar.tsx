@@ -42,12 +42,16 @@ export default function Navbar() {
           {/* Hamburger - hanya mobile & tablet */}
           <button
             onClick={() => setMenuOpen(!menuOpen)}
-            className="lg:hidden flex flex-col gap-1.5 p-2"
+            className="lg:hidden p-2"
             aria-label="Toggle menu"
           >
-            <span className={`block w-6 h-0.5 bg-gray-800 transition-all duration-300 ${menuOpen ? "rotate-45 translate-y-2" : ""}`} />
-            <span className={`block w-6 h-0.5 bg-gray-800 transition-all duration-300 ${menuOpen ? "opacity-0" : ""}`} />
-            <span className={`block w-6 h-0.5 bg-gray-800 transition-all duration-300 ${menuOpen ? "-rotate-45 -translate-y-2" : ""}`} />
+            <Image
+              src="/ikon-hamburger.png"
+              alt="menu"
+              width={24}
+              height={24}
+              className="cursor-pointer cursor-pointer translate-y-1"
+            />
           </button>
         </div>
       </div>
