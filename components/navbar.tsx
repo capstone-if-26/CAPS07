@@ -15,7 +15,7 @@ export default function Navbar() {
         </div>
 
         {/* Menu Desktop */}
-        <ul className="hidden lg:flex items-center gap-9 text-[15px] font-bold text-gray-800 whitespace-nowrap absolute left-1/2 -translate-x-1/2">
+        <ul className="hidden xl:flex items-center gap-9 text-[15px] font-bold text-gray-800 whitespace-nowrap absolute left-1/2 -translate-x-1/2">
           <li className="cursor-pointer hover:text-red-700">Tentang OJK</li>
           <li className="cursor-pointer hover:text-red-700">Fungsi Utama</li>
           <li className="cursor-pointer hover:text-red-700">Publikasi</li>
@@ -29,20 +29,20 @@ export default function Navbar() {
         <div className="flex items-center gap-3">
 
           {/* Search */}
-          <div className="hidden lg:flex items-center bg-gray-100 rounded-full px-3 h-[34px] w-[130px]">
+          <div className="hidden xl:flex items-center bg-gray-100 rounded-full px-3 h-[34px] w-[130px]">
             <Image src="/ikon-cari2.png" alt="search" width={14} height={14} className="opacity-70" />
             <input type="text" className="bg-transparent outline-none ml-2 text-sm w-full" />
           </div>
 
           {/* ID bulat */}
-          <div className="hidden lg:flex w-8 h-8 rounded-full bg-black text-white items-center justify-center text-xs font-semibold">
+          <div className="hidden xl:flex w-8 h-8 rounded-full bg-black text-white items-center justify-center text-xs font-semibold">
             ID
           </div>
 
           {/* Hamburger - hanya mobile & tablet */}
           <button
             onClick={() => setMenuOpen(!menuOpen)}
-            className="lg:hidden p-2"
+            className="xl:hidden p-2"
             aria-label="Toggle menu"
           >
             <Image
@@ -58,7 +58,7 @@ export default function Navbar() {
 
       {/* Mobile Dropdown */}
       {menuOpen && (
-        <div className="lg:hidden bg-white border-t border-gray-200 shadow-md">
+        <div className="xl:hidden bg-white border-t border-gray-200 shadow-md">
 
           {/* Menu item */}
           <ul className="flex flex-col text-[15px] font-bold text-gray-800 px-4 pt-2 pb-2">

@@ -1,7 +1,7 @@
 export default function Hero() {
   return (
     <>
-      {/* MOBILE ONLY (< 768px) */}
+      {/* MOBILE (< 768px) */}
       <div className="block md:hidden relative w-full" style={{ paddingTop: "38.75%" }}>
         <section
           className="absolute inset-0"
@@ -38,7 +38,7 @@ export default function Hero() {
         </section>
       </div>
 
-      {/* TABLET s/d iPad Pro (768px – 1279px) */}
+      {/* TABLET - iPad Pro (768px – 1279px) */}
       <div className="hidden md:block xl:hidden relative w-full aspect-[16/6]">
         <section
           className="absolute inset-0"

@@ -179,14 +179,24 @@ export default function FloatingMenu() {
               <div
                 style={{ border: "1.5px solid #a11212" }}
                 className={`
+                  chat-responsive
+
                   bg-[#f3f3f3]
                   shadow-[0_6px_18px_rgba(0,0,0,0.18)]
-                  w-[87%] max-w-[380px] rounded-xl p-4
-                  h-[84vh] flex flex-col
+
+                  /* MOBILE */
+                  w-[90vw] max-w-[380px]
+                  h-[80vh] max-h-[700px]
+
+                  /* DESKTOP */
                   sm:fixed sm:right-18 sm:bottom-28
-                  sm:w-[270px] sm:h-[65vh]
-                  sm:rounded-xl sm:p-3 sm:flex sm:flex-col
-                  sm:pointer-events-auto
+                  sm:w-[270px] sm:max-w-none sm:min-w-0
+                  sm:h-[65vh] sm:max-h-none sm:min-h-0
+
+                  rounded-xl p-4 flex flex-col
+
+                  pointer-events-auto
+
                   sm:shadow-[0_0_16px_2px_rgba(161,18,18,0.2),0_6px_18px_rgba(0,0,0,0.18)]
                 `}
               >
@@ -235,12 +245,12 @@ export default function FloatingMenu() {
 
                   {/* Menu */}
                   {messages.length === 0 && (
-                    <div className="flex flex-wrap gap-1 mx-auto max-w-[85%] justify-start font-semibold flex-shrink-0">
+                    <div className="grid grid-cols-2 gap-1 mx-auto max-w-[85%] font-semibold flex-shrink-0">
                       {Object.keys(menuResponses).map((label, i) => (
                         <button
                           key={i}
                           onClick={() => handleSend(label)}
-                          className="bg-[#a11212] text-white text-[9px] px-1.5 py-[2px] rounded w-[49%] hover:bg-[#8a0f0f] transition-colors"
+                          className="bg-[#a11212] text-white text-[9px] px-1.5 py-[3px] rounded w-full hover:bg-[#8a0f0f] transition-colors"
                         >
                           {label}
                         </button>
@@ -287,8 +297,8 @@ export default function FloatingMenu() {
                     value={input}
                     onChange={(e) => setInput(e.target.value)}
                     onKeyDown={(e) => e.key === "Enter" && handleSend()}
-                    placeholder="Selamat Datang, Apa yang bisa saya bantu?..."
-                    className="flex-1 border border-[#a11212] rounded px-2 py-1 text-[8px] text-black bg-white placeholder-[#a11212]/50 outline-none"
+                    placeholder="Apa yang bisa saya bantu?..."
+                    className="flex-1 border border-[#a11212] rounded px-2 py-1 text-[11px] text-black bg-white placeholder-[#a11212]/50 outline-none"
                   />
                   
                   {/* Wrapper tombol kirim */}
@@ -309,7 +319,7 @@ export default function FloatingMenu() {
 
                   <button
                     onClick={() => handleSend()}
-                    className="bg-[#a11212] text-white px-2 py-1 rounded text-[10px] font-semibold"
+                    className="bg-[#a11212] text-white px-2 py-1 rounded text-[12px] font-semibold"
                   >
                     Kirim
                   </button>
