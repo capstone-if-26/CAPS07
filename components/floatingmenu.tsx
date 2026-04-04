@@ -136,6 +136,7 @@ export default function FloatingMenu() {
                 onClick={() => setOpenMenu(!openMenu)}
                 className="cursor-pointer translate-y-1"
               />
+              
 
               {openMenu && (
                 <div className="absolute top-full left-0 w-full bg-white border-t border-gray-200 shadow-md z-50">
