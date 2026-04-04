@@ -15,7 +15,7 @@
 | Environment | URL |
 | :--- | :--- |
 | Production | [https://caps-07.vercel.app/](https://caps-07.vercel.app/) |
-| Preview | [Liat di latest Preview Deployments] |
+| Preview | [https://staging-caps07.vercel.app/](https://staging-caps07.vercel.app/) |
 
 ## Project Goals
 
