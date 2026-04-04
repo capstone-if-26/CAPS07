@@ -1,32 +1,31 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+<img width="2752" height="848" alt="Chatbot OJK Banner" src="https://github.com/user-attachments/assets/5032eb44-12fe-4558-aa57-5d84ed759328" />
 
-## Getting Started
+## Project Documents
 
-First, run the development server:
+| Dokumen | Link |
+| :--- | :--- |
+| Laporan & Analisis | [Google Docs](https://docs.google.com/document/d/1Q-o149zylMlUubyS8KkxQv51RSSqpxMGKpc1YI62QBY/edit) |
+| Test Case | [Google Spreadsheet](https://docs.google.com/spreadsheets/d/1XtyylTPrrWFQSW42aCRkBqRIeJKl_Rjt6Eu28nfMJaQ/edit) |
+| User Story | [Google Spreadsheet](https://docs.google.com/spreadsheets/d/15atoI_P6CkckvO4iuhn9TlrO7kyKBjh0/edit) |
+| Dokumen Capstone | [Google Drive](https://drive.google.com/drive/folders/1OgRaGnUOk5YWPVG30tUwxK2YJSLGVzud) |
+| Figma Design | [Figma](https://www.figma.com/design/Fg2tHsMG2SqgOJnE1rp9r8/OJK-CHATBOT?node-id=1-4&t=j4La4Jf5zjTBFGmm-1) |
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+## Project Environment
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+| Environment | URL |
+| :--- | :--- |
+| Production | [https://caps-07.vercel.app/](https://caps-07.vercel.app/) |
+| Preview | [Liat di latest Preview Deployments] |
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Project Goals
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+| Sprint | Date | Deliverables |
+| :--- | :--- | :--- |
+| Sprint-1 | 11 MAR -30 MAR | ~~Interface chatbot sudah siap digunakan, dilengkapi dengan tombol intent cepat dan tampilan yang responsive (UI only).~~ |
+| Sprint-2 | 31 MAR - 13 APR | Chatbot sudah dapat digunakan dengan knowledge dasar, mampu menjalankan aksi sederhana dan tombol intent cepat sudah berfungsi. |
+| Sprint-3 | 14 APR - 27 APR | Chatbot mampu menangani task yang lebih kompleks, seperti mengecek legalitas, mengecek kasus, serta memberikan rekomendasi langkah yang dapat diambil. |
+| Sprint-4 | 28 APR - 11 MEI | Chatbot dapat memberikan edukasi dengan bahasa sehari-hari, termasuk memberikan contoh kasus dan menguji apakah pengguna dapat membedakan situasi legal dan ilegal. |
+| Sprint-5 | 12 MEI - 25 MEI | Dashboard sudah dapat diakses menggunakan autentikasi, serta chat history sudah tersimpan dan dapat dilihat melalui dashboard. |
+| Sprint-6 | 26 MEI - 8 JUN | Dashboard menampilkan metrik penting, seperti tren pertanyaan, pertanyaan yang paling sering muncul, conversion rate, dan insight lainnya. |
 
 
