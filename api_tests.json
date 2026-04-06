@@ -1,0 +1,135 @@
+{
+  "info": {
+    "name": "OJK RAG Endpoint Tests",
+    "description": "Koleksi Postman/Insomnia untuk memvalidasi endpoint-endpoint RAG Pipeline",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "1. GET /api/chats - Cek Status",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:3000/api/chats",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "3000",
+          "path": ["api", "chats"]
+        }
+      }
+    },
+    {
+      "name": "2. POST /api/chats - Buat Percakapan RAG Baru",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"question\": \"Apa saja syarat pembuatan dokumen reksa dana menurut peraturan terbaru?\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "http://localhost:3000/api/chats",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "3000",
+          "path": ["api", "chats"]
+        }
+      }
+    },
+    {
+      "name": "3. GET /api/chats/{chatId} - Ambil Histori Chat",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:3000/api/chats/ISI_DENGAN_CHAT_ID",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "3000",
+          "path": ["api", "chats", "ISI_DENGAN_CHAT_ID"]
+        }
+      }
+    },
+    {
+      "name": "4. POST /api/chats/{chatId} - Lanjutkan Percakapan (Reply)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"messages\": [\n    {\"role\": \"user\", \"content\": \"Bisa tolong jelaskan lebih detail mengenai pasal 5?\"}\n  ]\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "http://localhost:3000/api/chats/ISI_DENGAN_CHAT_ID",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "3000",
+          "path": ["api", "chats", "ISI_DENGAN_CHAT_ID"]
+        }
+      }
+    },
+    {
+      "name": "5. GET /api/chats/messages/{messageId} - Cek Pesan Spesifik",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:3000/api/chats/messages/ISI_DENGAN_MESSAGE_ID",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "3000",
+          "path": ["api", "chats", "messages", "ISI_DENGAN_MESSAGE_ID"]
+        }
+      }
+    },
+    {
+      "name": "6. POST /api/chats/messages/{messageId}/feedback - Kirim Feedback",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"rating\": 5,\n  \"reason\": \"Jawaban sangat akurat dan sesuai dengan konteks kebijakan OJK.\",\n  \"metadata\": {\n    \"ui_version\": \"v1.2.0\"\n  }\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "http://localhost:3000/api/chats/messages/ISI_DENGAN_MESSAGE_ID/feedback",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "3000",
+          "path": ["api", "chats", "messages", "ISI_DENGAN_MESSAGE_ID", "feedback"]
+        }
+      }
+    }
+  ]
+}

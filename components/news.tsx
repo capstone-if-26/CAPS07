@@ -85,7 +85,7 @@ export default function News() {
         </div>
 
         {/* CONTENT */}
-        <div className="bg-white pt-8 pb-10 px-4 md:px-6">
+        <div className="bg-white pt-8 pb-16 md:pb-20 px-4 md:px-6">
           <div className="max-w-[1280px] mx-auto">
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
               {items.map((item, i) => (

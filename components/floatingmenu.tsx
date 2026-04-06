@@ -49,9 +49,29 @@ export default function FloatingMenu() {
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState("")
   const chatEndRef = useRef<HTMLDivElement>(null)
+  const chatContainerRef = useRef<HTMLDivElement>(null)
+  const [showScrollBtn, setShowScrollBtn] = useState(false)
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" })
+  }, [messages])
+
+  useEffect(() => {
+    const el = chatContainerRef.current
+    if (!el) return
+
+    const handleScroll = () => {
+      const isScrollable = el.scrollHeight > el.clientHeight
+      const isAtBottom =
+        el.scrollHeight - el.scrollTop - el.clientHeight < 10
+
+      setShowScrollBtn(isScrollable && !isAtBottom)
+    }
+
+    handleScroll() // initial check
+    el.addEventListener("scroll", handleScroll)
+
+    return () => el.removeEventListener("scroll", handleScroll)
   }, [messages])
 
   const handleSend = (customText?: string): void => {
@@ -74,6 +94,10 @@ export default function FloatingMenu() {
     if (!customText) setInput("")
   }
 
+  const handleAutoScroll = () => {
+  chatEndRef.current?.scrollIntoView({ behavior: "smooth" })
+  }
+
   return (
     <>
       <style>{`
@@ -87,12 +111,12 @@ export default function FloatingMenu() {
           onClick={() => setOpenChat(!openChat)}
           className="w-10 h-10 rounded-full bg-[#a11212] flex items-center justify-center cursor-pointer shadow-md"
         >
-          <Image src="/avatar-bot.png" alt="chatbot" width={39} height={39} />
+          <Image src="/avatar-botnew.png" alt="chatbot" width={39} height={39} />
         </div>
 
-        <Image src="/ikon-wa2.png" alt="wa" width={39} height={39} />
-        <Image src="/ikon-id.png" alt="id" width={39} height={39} />
-        <Image src="/ikon-orang2.png" alt="user" width={39} height={39} />
+        <Image src="/ikon-wanew.png" alt="wa" width={39} height={39} />
+        <Image src="/ikon-idnew.png" alt="id" width={39} height={39} />
+        <Image src="/ikon-orangnew.png" alt="user" width={39} height={39} />
       </div>
 
       {/* Chat Window */}
@@ -104,29 +128,50 @@ export default function FloatingMenu() {
             <div className="sm:hidden bg-white flex items-center justify-between px-6 py-3 relative w-full">
               <Image src="/ojk-logo.png" alt="ojk" width={120} height={38} />
 
-              <div
-                className="w-6 h-4 flex flex-col justify-between cursor-pointer"
+              <Image
+                src="/ikon-hamburger.png"
+                alt="menu"
+                width={24}
+                height={24}
                 onClick={() => setOpenMenu(!openMenu)}
-              >
-                <span className="block h-[2px] bg-black"></span>
-                <span className="block h-[2px] bg-black"></span>
-                <span className="block h-[2px] bg-black"></span>
-              </div>
+                className="cursor-pointer translate-y-1"
+              />
+              
 
               {openMenu && (
-                <div className="absolute top-full right-4 mt-1 bg-white border border-gray-200 rounded shadow-md z-50 min-w-[120px]">
-                  <button
-                    onClick={() => {
-                      setOpenMenu(false)
-                      setOpenChat(false)
-                    }}
-                    className="w-full text-left px-4 py-2 text-sm text-[#a11212] font-semibold hover:bg-gray-100"
-                  >
-                    Kembali
-                  </button>
-                </div>
-              )}
+                <div className="absolute top-full left-0 w-full bg-white border-t border-gray-200 shadow-md z-50">
+
+                  {/* Menu item */}
+                  <ul className="flex flex-col text-[15px] font-bold text-gray-800 px-4 pt-2 pb-2">
+                    {["Tentang OJK", "Fungsi Utama", "Publikasi", "Regulasi", "Statistik", "Layanan", "Kasir"].map((item) => (
+                       <li
+                          key={item}
+                          className="cursor-pointer hover:text-red-700 py-3 border-b border-gray-100 last:border-0"
+                          onClick={() => setOpenMenu(false)}
+                        >
+                          {item}
+                        </li>
+                      ))}
+                    </ul>
+
+                    {/* Search + ID */}
+                    <div className="px-4 pb-4 pt-2 flex items-center gap-3 border-t border-gray-100">
+                      <div className="flex items-center bg-gray-100 rounded-full px-3 h-[34px] flex-1">
+                        <Image src="/ikon-cari2.png" alt="search" width={14} height={14} className="opacity-50" />
+                        <input
+                          type="text"
+                          className="bg-transparent outline-none ml-2 text-sm w-full"
+                        />
+                      </div>
+                      <div className="w-8 h-8 rounded-full bg-black text-white flex items-center justify-center text-xs font-semibold flex-shrink-0">
+                        ID
+                      </div>
+                    </div>
+
+                  </div>
+                )}
             </div>
+
 
             {/* Background merah */}
             <div className="bg-[#850C12] h-full flex items-start justify-center pt-4 sm:bg-transparent sm:block">
@@ -135,55 +180,78 @@ export default function FloatingMenu() {
               <div
                 style={{ border: "1.5px solid #a11212" }}
                 className={`
+                  chat-responsive
+
                   bg-[#f3f3f3]
                   shadow-[0_6px_18px_rgba(0,0,0,0.18)]
-                  w-[87%] max-w-[380px] rounded-xl p-4
-                  h-[84vh] flex flex-col
+
+                  /* MOBILE */
+                  w-[90vw] max-w-[380px]
+                  h-[80vh] max-h-[700px]
+
+                  /* DESKTOP */
                   sm:fixed sm:right-18 sm:bottom-28
-                  sm:w-[270px] sm:h-[65vh]
-                  sm:rounded-xl sm:p-3 sm:flex sm:flex-col
-                  sm:pointer-events-auto
+                  sm:w-[270px] sm:max-w-none sm:min-w-0
+                  sm:h-[65vh] sm:max-h-none sm:min-h-0
+
+                  rounded-xl p-4 flex flex-col
+
+                  pointer-events-auto
+
                   sm:shadow-[0_0_16px_2px_rgba(161,18,18,0.2),0_6px_18px_rgba(0,0,0,0.18)]
                 `}
               >
 
                 {/* Header Chat */}
-                <div className="bg-[#a11212] text-white px-2 py-1.5 flex items-center gap-2 font-semibold text-[12px] rounded-md flex-shrink-0">
-                  <Image src="/ikon-chtbot.png" alt="bot" width={16} height={16} />
+                <div className="bg-[#a11212] text-white px-2 py-1.5 flex items-center gap-2 font-semibold text-[13px] rounded-md flex-shrink-0">
+                  <Image src="/ikon-chtbotnew.png" alt="bot" width={19} height={19} />
                   <span className="flex-1">Sahabat Keuangan</span>
+
+                  {/* Ikon close */}
+                  <Image
+                    src="/ikon-closenew.png"
+                    alt="close"
+                    width={10}
+                    height={10}
+                    onClick={() => setOpenChat(false)}
+                    className="cursor-pointer hover:opacity-80 transition"
+                  />
                 </div>
 
                 {/* Scrollable Content */}
-                <div className="chat-scroll mt-2 flex-1 overflow-y-auto space-y-3 flex flex-col pr-1">
-
+                <div 
+                  ref={chatContainerRef}
+                  className="chat-scroll mt-2 flex-1 overflow-y-auto space-y-3 flex flex-col pr-1">
+                
                   {/* TITLE */}
-                  <div className="flex items-center gap-1.5 text-[10px] font-semibold text-[#a11212] flex-shrink-0">
+                  <div className="flex items-center gap-1.5 text-[11px] font-semibold text-[#a11212] flex-shrink-0">
                     <Image
-                      src="/ikon-chtbot.png"
+                      src="/ikon-chtbot2.png"
                       alt="bot"
-                      width={13}
-                      height={13}
+                      width={16}
+                      height={16}
                       className="rounded-full border border-[#a11212]"
                     />
                     Sahabat Keuangan
                   </div>
 
                   {/* chat bubble */}
-                  <div className="bg-[#f3f3f3] border border-[#a11212] rounded-md p-1.5 max-w-[85%] text-[8px] leading-tight mx-auto font-semibold flex-shrink-0">
+                  <div className="bg-[#f3f3f3] text-black border border-[#a11212] rounded-md p-1.5 max-w-[85%] text-[11px] leading-tight mx-auto font-semibold flex-shrink-0">
                     Hai Sobat OJK! 👋 <br />
-                    Saat ini Anda terhubung dengan akun resmi Otoritas Jasa Keuangan,<br /><br />
-                    Perkenalkan saya ROJAK (Robot Penjawab Kontak OJK)<br /><br />
-                    Untuk memulai silahkan pilih layanan yang Anda butuhkan di bawah ini.
+                    Kamu sekarang sudah terhubung dengan layanan resmi Otoritas Jasa Keuangan.<br /><br />
+                    Kenalin, aku ROJAK (Robot Penjawab Kontak OJK) yang siap bantu kamu 😊<br /><br />
+                    Mau cari info apa hari ini?
+                    Pilih aja layanan yang kamu butuhkan di bawah ya 👇
                   </div>
 
                   {/* Menu */}
                   {messages.length === 0 && (
-                    <div className="flex flex-wrap gap-1 mx-auto max-w-[85%] justify-start font-semibold flex-shrink-0">
+                    <div className="grid grid-cols-2 gap-1 mx-auto max-w-[85%] font-semibold flex-shrink-0">
                       {Object.keys(menuResponses).map((label, i) => (
                         <button
                           key={i}
                           onClick={() => handleSend(label)}
-                          className="bg-[#a11212] text-white text-[6px] px-1.5 py-[2px] rounded w-[49%] hover:bg-[#8a0f0f] transition-colors"
+                          className="bg-[#a11212] text-white text-[9px] px-1.5 py-[3px] rounded w-full hover:bg-[#8a0f0f] transition-colors"
                         >
                           {label}
                         </button>
@@ -196,19 +264,21 @@ export default function FloatingMenu() {
                     {messages.map((msg, i) => (
                       <div key={i} className="max-w-[85%] mx-auto flex flex-col">
                         <div
-                          className={`inline-block p-1.5 rounded-md text-[8px] leading-tight font-semibold max-w-full ${
+                          className={`inline-block p-1.5 rounded-md text-[11px] leading-tight font-semibold max-w-full break-words ${
                             msg.sender === "user"
-                              ? "bg-[#a11212] text-white self-end border border-[#a11212]"
-                              : "bg-[#f3f3f3] text-black self-start border border-[#a11212]"
+                              ? "bg-[#a11212] text-white self-end border border-[#a11212] dark:bg-[#a11212] dark:text-white"
+                              : "bg-[#f3f3f3] text-black dark:text-black self-start border border-[#a11212] dark:bg-[#f3f3f3] dark:text-black"
                           }`}
                         >
-                          <span>{msg.text}</span>
+                          <span className="break-words whitespace-pre-wrap">
+                            {msg.text}
+                          </span>
                           {msg.sender === "bot" && msg.link != null && (
                             <a
                               href={msg.link}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="block mt-1 text-[#a11212] underline break-all"
+                              className="block mt-1 text-[#a11212] underline break-all break-words"
                             >
                               {msg.link}
                             </a>
@@ -221,22 +291,41 @@ export default function FloatingMenu() {
 
                 </div>
 
-                {/* Input */}
+                {/* Input + auto-scroll */}
                 <div className="mt-2 flex items-center gap-1 flex-shrink-0">
+                  
                   <input
                     value={input}
                     onChange={(e) => setInput(e.target.value)}
                     onKeyDown={(e) => e.key === "Enter" && handleSend()}
-                    placeholder="Selamat Datang, Apa yang bisa saya bantu?..."
-                    className="flex-1 border border-[#a11212] rounded px-2 py-1 text-[8px] leading-start outline-none bg-white"
+                    placeholder="Apa yang bisa saya bantu?..."
+                    className="flex-1 border border-[#a11212] rounded px-2 py-1 text-[11px] text-black bg-white placeholder-[#a11212]/50 outline-none"
                   />
+                  
+                  {/* Wrapper tombol kirim */}
+                  <div className="relative flex items-center">
+
+                    {/* Auto Scroll Button */}
+                    {showScrollBtn && (
+                    <Image
+                      src="/ikon-autoscroll.png"
+                      alt="auto scroll"
+                      width={30}
+                      height={30}
+                      quality={100}
+                      onClick={handleAutoScroll}
+                      className="absolute bottom-full mb-0 right-0 translate-y-0.5 cursor-pointer hover:scale-110 transition-all duration-200 object-contain drop-shadow-md"
+                    />
+                  )}
+
                   <button
                     onClick={() => handleSend()}
-                    className="bg-[#a11212] text-white px-2 py-1 rounded text-[10px]"
+                    className="bg-[#a11212] text-white px-2 py-1 rounded text-[12px] font-semibold"
                   >
                     Kirim
                   </button>
                 </div>
+              </div>
 
               </div>
             </div>

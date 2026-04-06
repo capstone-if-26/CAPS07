@@ -19,6 +19,8 @@
   }
 }
 
+
+
 body {
   background: var(--background);
   color: var(--foreground);
@@ -110,3 +112,14 @@ body {
   font-size:14px;
 }
 
+@media (min-width: 1600px) {
+  .chat-responsive {
+    width: 22vw !important;
+    max-width: 400px;
+    min-width: 300px;
+
+    height: 70vh !important;
+    max-height: 750px;
+    min-height: 450px;
+  }
+}
