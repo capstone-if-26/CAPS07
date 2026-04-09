@@ -49,14 +49,14 @@ export interface RagResponse {
  */
 export async function generateRagAnswer(
   question: string,
-  namespaceId: string,
+  namespaces: string[],
   longTermMemory: string,
   shortTermMemory: any[],
   topK: number = 6
 ): Promise<RagResponse> {
 
   // 1. Ambil dokumen relevan dari Pinecone
-  const matches = await retrieveRelevantChunks(question, namespaceId, topK);
+  const matches = await retrieveRelevantChunks(question, namespaces, topK);
 
   // 2. Format menjadi konteks string
   const contextText = formatRetrievedContext(matches);
@@ -129,5 +129,68 @@ Format WAJIB:
       score: m.score || 0,
       metadata: m.metadata || {}
     }))
+  };
+}
+
+/**
+ * Generate answer directly without retrieving from Pinecone namespaces
+ * used for casual or general non-business questions.
+ */
+export async function generateDirectAnswer(
+  question: string,
+  longTermMemory: string,
+  shortTermMemory: any[]
+): Promise<RagResponse> {
+  const shortTermMemoryStr = shortTermMemory.map(m => `${m.senderType}: ${m.content}`).join('\n');
+
+  const systemPrompt = `You are a helpful and intelligent assistant for Otoritas Jasa Keuangan (OJK).
+You are answering a general/casual query. Be polite and concise in Indonesian.
+  
+Always respond in STRICT JSON.
+Do not include markdown, explanation, or extra text.
+Only output valid JSON.
+Format WAJIB:
+{
+  "answer": "<jawaban utama ke user>",
+  "summary": "<ringkasan kumulatif percakapan terbaru>"
+}
+`;
+
+  const userPrompt = `Long-term memory (summary):\n${longTermMemory || 'Belum ada percakapan sebelumnya.'}\n\nShort-term memory (last messages):\n${shortTermMemoryStr || 'Belum ada pesan terbaru.'}\n\nCurrent Question:\n${question}\n\nInstruction: Output strictly JSON with answer and summary fields.`;
+
+  let attempt = 0;
+  const maxRetries = 2; 
+  let parsedResult = { answer: '', summary: '' };
+  
+  while (attempt <= maxRetries) {
+    try {
+      const { text } = await generateText({
+        model: model,
+        system: systemPrompt,
+        prompt: userPrompt,
+        temperature: 0.1,
+        topP: 0.9,
+      });
+      const cleanText = text.replace(/```json/g, '').replace(/```/g, '').trim();
+      parsedResult = JSON.parse(cleanText);
+      
+      if (!parsedResult.answer || typeof parsedResult.summary !== 'string') {
+        throw new Error('Invalid JSON format keys: answer and summary are missing');
+      }
+      break; 
+    } catch (err) {
+      attempt++;
+      if (attempt > maxRetries) {
+        throw new Error(`LLM Error / Failed to parse JSON after 3 attempts. Last error: ${err}`);
+      }
+      await new Promise(res => setTimeout(res, 1000));
+    }
+  }
+
+  return {
+    question,
+    answer: parsedResult.answer,
+    summary: parsedResult.summary,
+    matches: [] // No matches since no retrieval was performed
   };
 }

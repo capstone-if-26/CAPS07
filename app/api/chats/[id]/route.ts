@@ -29,10 +29,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       return buildFailedResponse('Pertanyaan diperlukan', null, 400);
     }
 
-    const namespaceId = process.env.PINECONE_NAMESPACE || "default-namespace";
-    
     console.log(`Melanjutkan chat [${id}] dengan kueri: ${question}`);
-    const result = await processExistingChat(id, question, namespaceId);
+    const result = await processExistingChat(id, question);
     
     return buildSuccessResponse({ 
       chatId: id,

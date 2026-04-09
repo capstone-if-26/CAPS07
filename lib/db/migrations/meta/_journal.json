@@ -15,6 +15,13 @@
       "when": 1775269848294,
       "tag": "0001_normal_paper_doll",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1775454508439,
+      "tag": "0002_tidy_sway",
+      "breakpoints": true
     }
   ]
 }

@@ -33,10 +33,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       return buildFailedResponse('Pertanyaan (question/messages) diperlukan', null, 400);
     }
 
-    const namespaceId = process.env.PINECONE_NAMESPACE || "pojk-22-2023-perlindungan-konsumen";
-
     console.log(`Melanjutkan chat ${chatId} untuk: ${question}`);
-    const result = await processExistingChat(chatId, question, namespaceId);
+    const result = await processExistingChat(chatId, question);
 
     return buildSuccessResponse({
       chatId,

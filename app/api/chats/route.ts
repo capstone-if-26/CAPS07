@@ -23,10 +23,8 @@ export async function POST(req: NextRequest) {
     });
     const userId = session?.user?.id || null;
 
-    const namespaceId = process.env.PINECONE_NAMESPACE || "pojk-22-2023-perlindungan-konsumen";
-
     console.log(`Memproses chat baru untuk: ${question}`);
-    const result = await processNewChat(null, question, namespaceId);
+    const result = await processNewChat(userId, question);
 
     return buildSuccessResponse({
       chatId: result.chat.id,

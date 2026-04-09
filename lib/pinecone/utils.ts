@@ -91,7 +91,7 @@ export async function upsertChunksPipeline(
  */
 export async function retrieveRelevantChunks(
   question: string,
-  namespaceId: string,
+  namespaces: string[],
   topK: number = 6, // Default TOP_K = 6
   metadataFilter?: Record<string, any>
 ): Promise<ScoredPineconeRecord<RecordMetadata>[]> {
@@ -99,16 +99,33 @@ export async function retrieveRelevantChunks(
   // 1. Transformasi pertanyaan menjadi vektor
   const queryVector = await embedQuery(question);
 
-  // 2. Akses Namespace spesifik
-  const pineconeNs = getPineconeNamespace(namespaceId);
-
-  // 3. Eksekusi pencarian vektor
-  const response = await pineconeNs.query({
-    vector: queryVector,
-    topK: topK,
-    includeMetadata: true,
-    filter: metadataFilter,
+  // 2. Akses Namespaces secara paralel
+  const promises = namespaces.map(async (ns) => {
+    const pineconeNs = getPineconeNamespace(ns);
+    const response = await pineconeNs.query({
+      vector: queryVector,
+      topK: topK,
+      includeMetadata: true,
+      filter: metadataFilter,
+    });
+    return response.matches;
   });
 
-  return response.matches;
+  // 3. Eksekusi pencarian vektor paralel
+  const results = await Promise.all(promises);
+
+  // 4. Gabungkan dan urutkan hasil
+  let allMatches: ScoredPineconeRecord<RecordMetadata>[] = [];
+  for (const matchArray of results) {
+    allMatches = allMatches.concat(matchArray);
+  }
+
+  // Deduplicate berdasarkan chunk_id (untuk berjaga-jaga jika ada tumpang tindih)
+  const uniqueMatches = Array.from(new Map(allMatches.map(item => [item.id, item])).values());
+
+  // Urutkan ulang berdasarkan score teratas
+  uniqueMatches.sort((a, b) => (b.score || 0) - (a.score || 0));
+
+  // Ambil hanya topK dari keseluruhan namespace
+  return uniqueMatches.slice(0, topK);
 }
