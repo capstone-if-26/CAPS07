@@ -26,7 +26,7 @@ function extractPineconeMetadata(chunk: ChunkData): RecordMetadata {
 
   for (const key of keysToExtract) {
     if (metaSource[key] !== undefined && metaSource[key] !== null) {
-      targetMeta[key] = metaSource[key] as any;
+      targetMeta[key] = metaSource[key] as string | number | boolean | string[];
     }
   }
 
@@ -93,7 +93,7 @@ export async function retrieveRelevantChunks(
   question: string,
   namespaces: string[],
   topK: number = 6, // Default TOP_K = 6
-  metadataFilter?: Record<string, any>
+  metadataFilter?: Record<string, unknown>
 ): Promise<ScoredPineconeRecord<RecordMetadata>[]> {
 
   // 1. Transformasi pertanyaan menjadi vektor

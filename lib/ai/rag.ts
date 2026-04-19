@@ -2,6 +2,7 @@ import { generateText } from 'ai';
 import { model } from '@/lib/openrouter';
 import { retrieveRelevantChunks } from '@/lib/pinecone/utils';
 import { ScoredPineconeRecord, RecordMetadata } from '@pinecone-database/pinecone';
+import { Chats } from '@/modules/chats/type';
 
 /**
  * Menyusun potongan dokumen (chunks) menjadi sebuah string teks kohesif 
@@ -40,7 +41,7 @@ export interface RagResponse {
   matches: {
     id: string;
     score: number;
-    metadata: Record<string, any>;
+    metadata: Record<string, unknown>;
   }[];
 }
 
@@ -51,7 +52,7 @@ export async function generateRagAnswer(
   question: string,
   namespaces: string[],
   longTermMemory: string,
-  shortTermMemory: any[],
+  shortTermMemory: Chats[] | [],
   topK: number = 6
 ): Promise<RagResponse> {
 
@@ -89,9 +90,9 @@ Format WAJIB:
 
   // 5. Eksekusi LLM via Vercel AI SDK dengan Retry (Maks 2x Retry)
   let attempt = 0;
-  const maxRetries = 2; 
+  const maxRetries = 2;
   let parsedResult = { answer: '', summary: '' };
-  
+
   while (attempt <= maxRetries) {
     try {
       const { text } = await generateText({
@@ -105,11 +106,11 @@ Format WAJIB:
       // bersihkan text dari kemungkinan markdown code block
       const cleanText = text.replace(/```json/g, '').replace(/```/g, '').trim();
       parsedResult = JSON.parse(cleanText);
-      
+
       if (!parsedResult.answer || typeof parsedResult.summary !== 'string') {
         throw new Error('Invalid JSON format keys: answer and summary are missing');
       }
-      break; 
+      break;
     } catch (err) {
       attempt++;
       if (attempt > maxRetries) {
@@ -139,7 +140,7 @@ Format WAJIB:
 export async function generateDirectAnswer(
   question: string,
   longTermMemory: string,
-  shortTermMemory: any[]
+  shortTermMemory: Chats[] | []
 ): Promise<RagResponse> {
   const shortTermMemoryStr = shortTermMemory.map(m => `${m.senderType}: ${m.content}`).join('\n');
 
@@ -159,9 +160,9 @@ Format WAJIB:
   const userPrompt = `Long-term memory (summary):\n${longTermMemory || 'Belum ada percakapan sebelumnya.'}\n\nShort-term memory (last messages):\n${shortTermMemoryStr || 'Belum ada pesan terbaru.'}\n\nCurrent Question:\n${question}\n\nInstruction: Output strictly JSON with answer and summary fields.`;
 
   let attempt = 0;
-  const maxRetries = 2; 
+  const maxRetries = 2;
   let parsedResult = { answer: '', summary: '' };
-  
+
   while (attempt <= maxRetries) {
     try {
       const { text } = await generateText({
@@ -173,11 +174,11 @@ Format WAJIB:
       });
       const cleanText = text.replace(/```json/g, '').replace(/```/g, '').trim();
       parsedResult = JSON.parse(cleanText);
-      
+
       if (!parsedResult.answer || typeof parsedResult.summary !== 'string') {
         throw new Error('Invalid JSON format keys: answer and summary are missing');
       }
-      break; 
+      break;
     } catch (err) {
       attempt++;
       if (attempt > maxRetries) {

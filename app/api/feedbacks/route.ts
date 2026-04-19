@@ -21,9 +21,14 @@ export async function POST(req: Request) {
     });
 
     return buildSuccessResponse({ feedbackId: feedback.id }, "Feedback umum berhasil dikirim", 201);
-  } catch (error: any) {
-    console.error("Error pada /api/feedbacks:", error);
-    return buildFailedResponse(error.message || "Gagal menyimpan feedback", undefined, 500);
+  } catch (error: unknown) {
+    let message = 'Terjadi kesalahan internal';
+
+    if (error instanceof Error) {
+      message = error.message;
+    }
+
+    return buildFailedResponse(message, error, 500);
   }
 }
 

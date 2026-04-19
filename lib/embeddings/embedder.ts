@@ -1,9 +1,10 @@
 
 import { pipeline } from '@xenova/transformers';
+import type { FeatureExtractionPipeline } from '@xenova/transformers';
 
 // Mengamankan instance model dalam memori global untuk mencegah re-instansiasi pada Serverless/Edge
-const globalForTransformers = globalThis as unknown as {
-  extractor: any | undefined;
+const globalForTransformers = globalThis as {
+  extractor?: FeatureExtractionPipeline;
 };
 
 const MODEL_NAME = process.env.EMBEDDING_MODEL || 'Xenova/multilingual-e5-base';
@@ -11,10 +12,13 @@ const MODEL_NAME = process.env.EMBEDDING_MODEL || 'Xenova/multilingual-e5-base';
 /**
  * Menginisialisasi model embedding. Menggunakan pola Singleton.
  */
-async function getExtractor() {
+async function getExtractor(): Promise<FeatureExtractionPipeline> {
   if (!globalForTransformers.extractor) {
     console.log(`Loading local model ${MODEL_NAME} into memory...`);
-    globalForTransformers.extractor = await pipeline('feature-extraction', MODEL_NAME);
+    globalForTransformers.extractor = await pipeline(
+      'feature-extraction',
+      MODEL_NAME
+    ) as FeatureExtractionPipeline; // optional cast (kadang perlu)
   }
   return globalForTransformers.extractor;
 }
