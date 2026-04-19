@@ -1,9 +1,9 @@
-import { pgTable, varchar, integer, text, timestamp } from 'drizzle-orm/pg-core';
+import { pgTable, varchar, integer, text, timestamp, uuid } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 import { messages } from './messages';
 
 export const messageFeedbacks = pgTable('message_feedbacks', {
-  id: varchar('id', { length: 100 }).primaryKey(),
+  id: uuid('id').primaryKey().defaultRandom(),
   rating: integer('rating'),
   reason: varchar('reason', { length: 100 }),
   metadata: text('metadata'),

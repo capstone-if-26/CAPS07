@@ -13,7 +13,7 @@ export interface StartChatResponse {
   data: {
     chatId: string
     answer: string
-    matches: any[]
+    matches: unknown[]
   }
 }
 
@@ -23,7 +23,7 @@ export interface ContinueChatResponse {
   data: {
     chatId: string
     answer: string
-    matches: any[]
+    matches: unknown[]
   }
 }
 

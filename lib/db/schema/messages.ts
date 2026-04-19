@@ -1,10 +1,10 @@
-import { pgTable, varchar, text, integer, timestamp, AnyPgColumn } from 'drizzle-orm/pg-core';
+import { pgTable, varchar, text, integer, timestamp, AnyPgColumn, uuid } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 import { chats } from './chats';
 import { messageFeedbacks } from './message_feedbacks';
 
 export const messages = pgTable('messages', {
-  id: varchar('id', { length: 100 }).primaryKey(),
+  id: uuid('id').primaryKey().defaultRandom(),
   senderType: varchar('sender_type', { length: 100 }), // Contoh: 'user', 'assistant', 'system'
   content: text('content'),
   status: varchar('status', { length: 16 }),

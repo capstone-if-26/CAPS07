@@ -3,6 +3,7 @@ import { cosineSimilarity, calculateStandardDeviation, getMeanEmbedding } from '
 import { DocType, ChunkType, ChunkerConfig, ChunkData, ChunkMetadata } from '@/types/chunker';
 
 import { pipeline } from '@xenova/transformers';
+import type { FeatureExtractionPipeline } from '@xenova/transformers';
 
 export interface SemanticConfig extends ChunkerConfig {
     modelName?: string;
@@ -22,19 +23,18 @@ export class AdaptiveSemanticChunker {
     private securityLevel: string;
     private effectiveDate: string | null;
     private status: string;
-    
+    private extractor!: FeatureExtractionPipeline;
+
     private modelName: string;
     private stdMultiplier: number;
     private overlapSentences: number;
     private minChunkSize: number;
     private maxChunkSize: number;
 
-    private extractor: any = null; // Instansiasi model pipeline
-
     constructor(config: SemanticConfig, fileHash: string, sourceFile: string) {
         const validDocTypes: DocType[] = ["legal_document", "procedure_sop", "educational_material", "faq", "news_event"];
         const inputDocType = config.docType || "educational_material";
-        
+
         if (!validDocTypes.includes(inputDocType)) {
             throw new Error(`doc_type '${inputDocType}' tidak valid. Pilih dari: ${validDocTypes.join(", ")}`);
         }
@@ -49,7 +49,7 @@ export class AdaptiveSemanticChunker {
         this.effectiveDate = config.effectiveDate || null;
         this.status = config.status || "BERLAKU";
 
-        this.modelName = config.modelName || "Xenova/multilingual-e5-base"; 
+        this.modelName = config.modelName || "Xenova/multilingual-e5-base";
         this.stdMultiplier = config.stdMultiplier ?? 0.5;
         this.overlapSentences = config.overlapSentences ?? 1;
         this.minChunkSize = config.minChunkSize ?? 300;
@@ -58,7 +58,7 @@ export class AdaptiveSemanticChunker {
 
     private cleanText(text: string): string {
         let cleaned = text.replace(/\r/g, '\n');
-        cleaned = cleaned.replace(/(?<=\w)-\n(?=\w)/g, ""); 
+        cleaned = cleaned.replace(/(?<=\w)-\n(?=\w)/g, "");
         return cleaned.split('\n').map(l => l.trim()).filter(l => l.length > 0).join(" ");
     }
 
@@ -79,7 +79,7 @@ export class AdaptiveSemanticChunker {
     private async embed(texts: string[]): Promise<number[][]> {
         await this.initModel();
         const prefixedTexts = texts.map(t => `passage: ${t}`);
-        
+
         // Output dari Transformers.js adalah Tensor, kita perlu mengekstrak array-nya
         const output = await this.extractor(prefixedTexts, { pooling: 'mean', normalize: true });
         return output.tolist();
@@ -87,16 +87,16 @@ export class AdaptiveSemanticChunker {
 
     private calculateAdaptiveThreshold(embeddings: number[][]): number {
         if (embeddings.length < 2) return 0.0;
-        
+
         const baselineSims: number[] = [];
         for (let i = 0; i < embeddings.length - 1; i++) {
             const sim = cosineSimilarity(embeddings[i], embeddings[i + 1]);
             baselineSims.push(sim);
         }
-        
+
         const meanSim = baselineSims.reduce((a, b) => a + b, 0) / baselineSims.length;
         const stdSim = calculateStandardDeviation(baselineSims, meanSim);
-        
+
         return meanSim - (this.stdMultiplier * stdSim);
     }
 
@@ -109,13 +109,13 @@ export class AdaptiveSemanticChunker {
         console.log(`Embedding ${sentences.length} sentences...`);
         const embeddings = await this.embed(sentences);
         const adaptiveThreshold = this.calculateAdaptiveThreshold(embeddings);
-        
+
         console.log(`Computed Adaptive Threshold: ${adaptiveThreshold.toFixed(4)}`);
 
         const chunks: ChunkData[] = [];
         let chunkIndex = 1;
 
-        const buildMetadata = (chunkId: string, combinedText: string, blockCount: number): ChunkMetadata => {
+        const buildMetadata = (chunkId: string, combinedText: string, _blockCount: number): ChunkMetadata => {
             let semanticChunkType: ChunkType = "semantic_block";
             if (this.docType === "educational_material") semanticChunkType = "concept_explanation";
             else if (this.docType === "news_event") semanticChunkType = "article_body";
@@ -160,7 +160,7 @@ export class AdaptiveSemanticChunker {
             if (isSemanticShift || isOverCapacity) {
                 if (currentCharLength >= this.minChunkSize) {
                     const combinedText = currentChunkSentences.join(" ");
-                    
+
                     // Injeksi Konteks (Contextual Payload)
                     const contextHeader = `[${this.documentName} | ${this.docType.toUpperCase()} | SEMANTIC]\n`;
                     const enrichedContent = contextHeader + combinedText;

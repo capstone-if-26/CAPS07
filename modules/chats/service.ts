@@ -3,6 +3,7 @@ import { createChatRecord, getChatById, updateChatSummary } from '@/modules/chat
 import { createMessageRecord, getLastMessagesByChatId } from '@/modules/messages/repository';
 import { fetchAllAvailableDocuments } from '@/modules/documents/service';
 import { routeIntentAndNamespaces } from '@/lib/ai/routing';
+import { Chats } from './type';
 
 const DEFAULT_MODEL_NAME = process.env.LLM_MODEL || "nvidia/nemotron-3-nano-30b-a3b:free";
 
@@ -15,7 +16,7 @@ export async function processNewChat(userId: string | null, question: string) {
 
   // Ambil memory (karena chat baru, memory kosong)
   const longTermMemory = "";
-  const shortTermMemory: any[] = [];
+  const shortTermMemory: Chats[] | [] = [];
 
   // Routing Namespaces & Intent
   const documents = await fetchAllAvailableDocuments();

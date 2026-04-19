@@ -9,8 +9,14 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     const { id } = parsedParams;
     const messages = await getMessagesByChatId(id);
     return buildSuccessResponse({ chatId: id, messages }, "Histori chat berhasil diambil", 200);
-  } catch (error: any) {
-    return buildFailedResponse(error.message, error, 500);
+  } catch (error: unknown) {
+    let message = 'Terjadi kesalahan internal';
+
+    if (error instanceof Error) {
+      message = error.message;
+    }
+
+    return buildFailedResponse(message, error, 500);
   }
 }
 
@@ -38,8 +44,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       matches: result.ragResponse.matches
     }, "Pesan berhasil dibalas", 200);
     
-  } catch (error: any) {
-    console.error(`Error pada /api/chats/[id]:`, error);
-    return buildFailedResponse(error.message, error, 500);
+  } catch (error: unknown) {
+    let message = 'Terjadi kesalahan internal';
+
+    if (error instanceof Error) {
+      message = error.message;
+    }
+
+    return buildFailedResponse(message, error, 500);
   }
 }

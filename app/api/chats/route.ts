@@ -32,9 +32,14 @@ export async function POST(req: NextRequest) {
       matches: result.ragResponse.matches
     }, "Chat berhasil diproses", 200);
 
-  } catch (error: any) {
-    console.error("Error pada /api/chats:", error);
-    return buildFailedResponse(error.message, error, 500);
+  } catch (error: unknown) {
+    let message = 'Terjadi kesalahan internal';
+
+    if (error instanceof Error) {
+      message = error.message;
+    }
+
+    return buildFailedResponse(message, error, 500);
   }
 }
 
