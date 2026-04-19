@@ -534,6 +534,7 @@ export default function FloatingMenu() {
                     Kenalin, aku ROJAK (Robot Penjawab Kontak OJK) yang siap bantu kamu 😊<br /><br />
                     Mau cari info apa hari ini? Pilih aja layanan di bawah atau ketik langsung ya 👇
                   </div>
+                  
                   {/* Menu (hanya tampil jika belum ada pesan) */}
                   {messages.length === 0 && (
                     <div className="grid grid-cols-2 gap-1 mx-auto max-w-[85%] font-semibold flex-shrink-0">
