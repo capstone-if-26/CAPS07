@@ -1,7 +1,7 @@
-import { pgTable, text, timestamp } from 'drizzle-orm/pg-core';
+import { pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
 
 export const documents = pgTable('documents', {
-  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  id: uuid('id').primaryKey().defaultRandom(),
   name: text('name').notNull(),
   namespace: text('namespace').notNull().unique(),
   description: text('description').notNull(),

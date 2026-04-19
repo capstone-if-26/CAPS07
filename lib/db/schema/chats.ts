@@ -1,10 +1,10 @@
-import { pgTable, varchar, timestamp, text } from 'drizzle-orm/pg-core';
+import { pgTable, varchar, timestamp, text, uuid } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 import { users } from './users';
 import { messages } from './messages';
 
 export const chats = pgTable('chats', {
-  id: varchar('id', { length: 100 }).primaryKey(),
+  id: uuid('id').primaryKey().defaultRandom(),
   title: varchar('title', { length: 100 }),
   status: varchar('status', { length: 32 }),
 
