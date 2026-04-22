@@ -6,6 +6,7 @@ import type { FeatureExtractionPipeline } from '@xenova/transformers';
 const globalForTransformers = globalThis as {
   extractor?: FeatureExtractionPipeline;
 };
+const resultCache = new Map<string, number[]>();
 
 const MODEL_NAME = process.env.EMBEDDING_MODEL || 'Xenova/multilingual-e5-base';
 
@@ -46,14 +47,20 @@ export async function embedPassages(texts: string[]): Promise<number[][]> {
  * Menggunakan prefiks 'query: ' sesuai spesifikasi model E5.
  */
 export async function embedQuery(question: string): Promise<number[]> {
+  // Cek apakah hasil untuk teks ini sudah pernah dihitung
+  if (resultCache.has(question)) {
+    return resultCache.get(question)!;
+  }
+
   const extractor = await getExtractor();
-
-  // Prefiks spesifik untuk kueri pada keluarga model E5
   const qPrefixed = `query: ${question}`;
-
   const output = await extractor([qPrefixed], { pooling: 'mean', normalize: true });
 
-  // output.tolist() mengembalikan array 2D (karena kita mengirim array of string).
-  // Kita hanya butuh dimensi pertama (vektor tunggal)
-  return output.tolist()[0];
+  const vector = output.tolist()[0];
+
+  // Simpan ke cache dengan pembatasan untuk menghindari memory leak
+  if (resultCache.size > 1000) resultCache.clear();
+  resultCache.set(question, vector);
+
+  return vector;
 }

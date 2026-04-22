@@ -20,8 +20,9 @@ export async function processNewChat(userId: string | null, question: string) {
 
   // Routing Namespaces & Intent
   const documents = await fetchAllAvailableDocuments();
-  const routing = await routeIntentAndNamespaces(question, documents);
+  const routing = await routeIntentAndNamespaces(question, documents, longTermMemory, shortTermMemory);
   console.log(`LLM Routing intent: ${routing.intent}, reason: ${routing.reason}`);
+  console.log(`LLM Routing rewritten query: ${routing.rewritten_query}`);
 
   let ragResponse;
   if (routing.intent === "business") {
@@ -32,9 +33,9 @@ export async function processNewChat(userId: string | null, question: string) {
     } else {
       console.log(`LLM Routing selected namespaces: ${namespaces.join(', ')}`);
     }
-    ragResponse = await generateRagAnswer(question, namespaces, longTermMemory, shortTermMemory);
+    ragResponse = await generateRagAnswer(routing.rewritten_query, namespaces, longTermMemory, shortTermMemory);
   } else {
-    ragResponse = await generateDirectAnswer(question, longTermMemory, shortTermMemory);
+    ragResponse = await generateDirectAnswer(routing.rewritten_query, longTermMemory, shortTermMemory);
   }
 
   // 3. Save User Message
@@ -70,8 +71,9 @@ export async function processExistingChat(chatId: string, question: string) {
 
   // Routing Namespaces & Intent
   const documents = await fetchAllAvailableDocuments();
-  const routing = await routeIntentAndNamespaces(question, documents);
+  const routing = await routeIntentAndNamespaces(question, documents, longTermMemory, shortTermMemory);
   console.log(`LLM Routing intent: ${routing.intent}, reason: ${routing.reason}`);
+  console.log(`LLM Routing rewritten query: ${routing.rewritten_query}`);
 
   let ragResponse;
   if (routing.intent === "business") {
@@ -82,9 +84,9 @@ export async function processExistingChat(chatId: string, question: string) {
     } else {
       console.log(`LLM Routing selected namespaces: ${namespaces.join(', ')}`);
     }
-    ragResponse = await generateRagAnswer(question, namespaces, longTermMemory, shortTermMemory);
+    ragResponse = await generateRagAnswer(routing.rewritten_query, namespaces, longTermMemory, shortTermMemory);
   } else {
-    ragResponse = await generateDirectAnswer(question, longTermMemory, shortTermMemory);
+    ragResponse = await generateDirectAnswer(routing.rewritten_query, longTermMemory, shortTermMemory);
   }
 
   // 3. Save User Message
