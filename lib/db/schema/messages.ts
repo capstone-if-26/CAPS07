@@ -12,7 +12,7 @@ export const messages = pgTable('messages', {
   modelName: varchar('model_name', { length: 100 }),
 
   // Self-referencing FK menggunakan AnyPgColumn (karena tabel menunjuk dirinya sendiri sebelum selesai dievaluasi)
-  parentMessage: varchar('parent_message', { length: 100 }).references((): AnyPgColumn => messages.id, { onDelete: 'set null' }),
+  parentMessage: uuid('parent_message').references((): AnyPgColumn => messages.id, { onDelete: 'set null' }),
 
   // Sesuai PDM ini varchar, walau secara logika indeks percakapan biasanya integer
   turnIndex: varchar('turn_index', { length: 100 }),
@@ -22,7 +22,7 @@ export const messages = pgTable('messages', {
   updatedAt: timestamp('updated_at').defaultNow().$onUpdate(() => new Date()).notNull(),
   deletedAt: timestamp('deleted_at'),
 
-  chatId: varchar('chat_id', { length: 100 }).references(() => chats.id, { onDelete: 'set null' }).notNull(),
+  chatId: uuid('chat_id').references(() => chats.id, { onDelete: 'set null' }).notNull(),
 });
 
 export const messagesRelations = relations(messages, ({ one, many }) => ({

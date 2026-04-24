@@ -11,7 +11,7 @@ export const messageFeedbacks = pgTable('message_feedbacks', {
   createdAt: timestamp('created_at').defaultNow().notNull(),
   deletedAt: timestamp('deleted_at'),
 
-  messageId: varchar('message_id', { length: 100 }).references(() => messages.id, { onDelete: 'cascade' }).notNull(),
+  messageId: uuid('message_id').references(() => messages.id, { onDelete: 'cascade' }).notNull(),
 });
 
 export const messageFeedbackRelations = relations(messageFeedbacks, ({ one }) => ({

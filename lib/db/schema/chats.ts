@@ -22,7 +22,7 @@ export const chats = pgTable('chats', {
 
   // Foreign Key ke tabel Users. 
   // onDelete: 'cascade' memastikan tidak ada sesi chat yang melayang jika user dihapus permanen.
-  userId: text('user_id').references(() => users.id, { onDelete: 'cascade' }),
+  userId: uuid('user_id').references(() => users.id, { onDelete: 'cascade' }),
 });
 
 export const chatsRelations = relations(chats, ({ one, many }) => ({

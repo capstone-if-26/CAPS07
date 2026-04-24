@@ -92,40 +92,44 @@ export async function upsertChunksPipeline(
 export async function retrieveRelevantChunks(
   question: string,
   namespaces: string[],
-  topK: number = 6, // Default TOP_K = 6
+  namespaceTopK: number = 10,
+  globalTopK: number = 60,
+  minScoreThreshold: number = 0.7,
   metadataFilter?: Record<string, unknown>
 ): Promise<ScoredPineconeRecord<RecordMetadata>[]> {
 
-  // 1. Transformasi pertanyaan menjadi vektor
   const queryVector = await embedQuery(question);
 
-  // 2. Akses Namespaces secara paralel
   const promises = namespaces.map(async (ns) => {
     const pineconeNs = getPineconeNamespace(ns);
     const response = await pineconeNs.query({
       vector: queryVector,
-      topK: topK,
+      topK: namespaceTopK,
       includeMetadata: true,
       filter: metadataFilter,
     });
     return response.matches;
   });
 
-  // 3. Eksekusi pencarian vektor paralel
   const results = await Promise.all(promises);
 
-  // 4. Gabungkan dan urutkan hasil
   let allMatches: ScoredPineconeRecord<RecordMetadata>[] = [];
   for (const matchArray of results) {
     allMatches = allMatches.concat(matchArray);
   }
 
-  // Deduplicate berdasarkan chunk_id (untuk berjaga-jaga jika ada tumpang tindih)
+  // 1. Deduplikasi
   const uniqueMatches = Array.from(new Map(allMatches.map(item => [item.id, item])).values());
 
-  // Urutkan ulang berdasarkan score teratas
-  uniqueMatches.sort((a, b) => (b.score || 0) - (a.score || 0));
+  // 2. Filter berdasarkan Threshold Vektor (Buang "sampah" yang tidak relevan)
+  const relevantMatches = uniqueMatches.filter(m => (m.score || 0) >= minScoreThreshold);
 
-  // Ambil hanya topK dari keseluruhan namespace
-  return uniqueMatches.slice(0, topK);
+  // 3. Urutkan berdasarkan bobot semantik tertinggi
+  relevantMatches.sort((a, b) => (b.score || 0) - (a.score || 0));
+
+  console.log(`Relevant matches: ${relevantMatches.length}`);
+  console.log(`First match: ${relevantMatches[0].score} - ${relevantMatches[0].metadata}`);
+
+  // 4. Potong menggunakan Global Limit yang lebih longgar
+  return relevantMatches.slice(0, globalTopK);
 }

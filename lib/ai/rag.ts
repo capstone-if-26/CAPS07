@@ -85,7 +85,7 @@ export async function generateRagAnswer(
       EXAMPLE TRANSFORMATION:
       Context text: "Ketentuan meliputi: (1) Pelindungan sesuai Pasal 97; (2) Aturan lama berlaku; (3) Definisi baru."
       Your Output Action: Convert into bullet points separated by the literal JSON newline character (\n).
-      Desired Result in JSON: "Ketentuan meliputi:\n- Pelindungan sesuai Pasal 97\n- Aturan lama berlaku\n- Definisi baru"
+      Desired Result in JSON: "Ketentuan meliputi: \n - Pelindungan sesuai Pasal 97 \n - Aturan lama berlaku \n - Definisi baru"
 
     2. JSON NEWLINE USAGE:
       Since your output is strictly JSON, you must use the exact string "\n" to represent a line break. Do NOT output raw formatting or actual line breaks that would invalidate JSON parsing.
@@ -145,6 +145,7 @@ export async function generateRagAnswer(
         temperature: 0.1,
         topP: 0.9,
         topK: 5,
+        maxOutputTokens: 3000,
       });
       // bersihkan text dari kemungkinan markdown code block
       const cleanText = text.replace(/```json/g, '').replace(/```/g, '').trim();
