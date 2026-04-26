@@ -1,11 +1,19 @@
-import { generateRagAnswer, generateDirectAnswer } from '@/lib/ai/rag';
-import { createChatRecord, getChatById, updateChatSummary } from '@/modules/chats/repository';
-import { createMessageRecord, getLastMessagesByChatId } from '@/modules/messages/repository';
-import { fetchAllAvailableDocuments } from '@/modules/documents/service';
-import { routeIntentAndNamespaces } from '@/lib/ai/routing';
-import { Chats } from './type';
+import { generateRagAnswer, generateDirectAnswer } from "@/lib/ai/rag";
+import {
+  createChatRecord,
+  getChatById,
+  updateChatSummary,
+} from "@/modules/chats/repository";
+import {
+  createMessageRecord,
+  getLastMessagesByChatId,
+} from "@/modules/messages/repository";
+import { fetchAllAvailableDocuments } from "@/modules/documents/service";
+import { routeIntentAndNamespaces } from "@/lib/ai/routing";
+import { Chats } from "./type";
 
-const DEFAULT_MODEL_NAME = process.env.LLM_MODEL || "nvidia/nemotron-3-nano-30b-a3b:free";
+const DEFAULT_MODEL_NAME =
+  process.env.LLM_MODEL || "nvidia/nemotron-3-nano-30b-a3b:free";
 
 export async function processNewChat(userId: string | null, question: string) {
   // 1. Create a new chat session
@@ -20,34 +28,56 @@ export async function processNewChat(userId: string | null, question: string) {
 
   // Routing Namespaces & Intent
   const documents = await fetchAllAvailableDocuments();
-  const routing = await routeIntentAndNamespaces(question, documents, longTermMemory, shortTermMemory);
-  console.log(`LLM Routing intent: ${routing.intent}, reason: ${routing.reason}`);
+  const routing = await routeIntentAndNamespaces(
+    question,
+    documents,
+    longTermMemory,
+    shortTermMemory,
+  );
+  console.log(
+    `LLM Routing intent: ${routing.intent}, reason: ${routing.reason}`,
+  );
   console.log(`LLM Routing rewritten query: ${routing.rewritten_query}`);
+  console.log(`LLM Routing confidence: ${routing.confidence}`);
+  console.log(`Sub-intent: ${routing.sub_intent}`);
 
   let ragResponse;
   if (routing.intent === "business") {
     let namespaces = routing.namespaces;
     if (!namespaces || namespaces.length === 0) {
-      namespaces = [process.env.PINECONE_NAMESPACE || "pojk-22-2023-perlindungan-konsumen"];
-      console.warn("Fallback to default namespace because LLM routing gave empty array.");
+      namespaces = [
+        process.env.PINECONE_NAMESPACE || "pojk-22-2023-perlindungan-konsumen",
+      ];
+      console.warn(
+        "Fallback to default namespace because LLM routing gave empty array.",
+      );
     } else {
-      console.log(`LLM Routing selected namespaces: ${namespaces.join(', ')}`);
+      console.log(`LLM Routing selected namespaces: ${namespaces.join(", ")}`);
     }
-    ragResponse = await generateRagAnswer(routing.rewritten_query, namespaces, longTermMemory, shortTermMemory);
+    ragResponse = await generateRagAnswer(
+      routing.rewritten_query,
+      namespaces,
+      longTermMemory,
+      shortTermMemory,
+    );
   } else {
-    ragResponse = await generateDirectAnswer(routing.rewritten_query, longTermMemory, shortTermMemory);
+    ragResponse = await generateDirectAnswer(
+      routing.rewritten_query,
+      longTermMemory,
+      shortTermMemory,
+    );
   }
 
   // 3. Save User Message
   await createMessageRecord({
-    senderType: 'user',
+    senderType: "user",
     content: question,
     chatId: chat.id,
   });
 
   // 4. Save Assistant Message
   const assistantMsg = await createMessageRecord({
-    senderType: 'assistant',
+    senderType: "assistant",
     content: ragResponse.answer,
     chatId: chat.id,
     modelName: DEFAULT_MODEL_NAME,
@@ -63,7 +93,7 @@ export async function processNewChat(userId: string | null, question: string) {
 export async function processExistingChat(chatId: string, question: string) {
   // 1. Ensure chat exists
   const chat = await getChatById(chatId);
-  if (!chat) throw new Error('Chat not found');
+  if (!chat) throw new Error("Chat not found");
 
   // Ambil memory
   const longTermMemory = chat.summary || "";
@@ -71,37 +101,58 @@ export async function processExistingChat(chatId: string, question: string) {
 
   // Routing Namespaces & Intent
   const documents = await fetchAllAvailableDocuments();
-  const routing = await routeIntentAndNamespaces(question, documents, longTermMemory, shortTermMemory);
-  console.log(`LLM Routing intent: ${routing.intent}, reason: ${routing.reason}`);
+  const routing = await routeIntentAndNamespaces(
+    question,
+    documents,
+    longTermMemory,
+    shortTermMemory,
+  );
+  console.log(
+    `LLM Routing intent: ${routing.intent}, reason: ${routing.reason}`,
+  );
   console.log(`LLM Routing rewritten query: ${routing.rewritten_query}`);
-
+  console.log(`LLM Routing confidence: ${routing.confidence}`);
+  console.log(`Sub-intent: ${routing.sub_intent}`);
   let ragResponse;
   if (routing.intent === "business") {
     let namespaces = routing.namespaces;
     if (!namespaces || namespaces.length === 0) {
-      namespaces = [process.env.PINECONE_NAMESPACE || "pojk-22-2023-perlindungan-konsumen"];
-      console.warn("Fallback to default namespace because LLM routing gave empty array.");
+      namespaces = [
+        process.env.PINECONE_NAMESPACE || "pojk-22-2023-perlindungan-konsumen",
+      ];
+      console.warn(
+        "Fallback to default namespace because LLM routing gave empty array.",
+      );
     } else {
-      console.log(`LLM Routing selected namespaces: ${namespaces.join(', ')}`);
+      console.log(`LLM Routing selected namespaces: ${namespaces.join(", ")}`);
     }
-    ragResponse = await generateRagAnswer(routing.rewritten_query, namespaces, longTermMemory, shortTermMemory);
+    ragResponse = await generateRagAnswer(
+      routing.rewritten_query,
+      namespaces,
+      longTermMemory,
+      shortTermMemory,
+    );
   } else {
-    ragResponse = await generateDirectAnswer(routing.rewritten_query, longTermMemory, shortTermMemory);
+    ragResponse = await generateDirectAnswer(
+      routing.rewritten_query,
+      longTermMemory,
+      shortTermMemory,
+    );
   }
 
   // 3. Save User Message
   await createMessageRecord({
-    senderType: 'user',
+    senderType: "user",
     content: question,
     chatId: chat.id,
   });
 
   // 4. Save Assistant Message
   const assistantMsg = await createMessageRecord({
-    senderType: 'assistant',
+    senderType: "assistant",
     content: ragResponse.answer,
     chatId: chat.id,
-    modelName: 'RAG Pipeline (OpenRouter)',
+    modelName: "RAG Pipeline (OpenRouter)",
     metadata: JSON.stringify({ matches: ragResponse.matches }),
   });
 
