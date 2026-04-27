@@ -10,7 +10,6 @@ import { Chats } from './type';
 import {
   classifyIntentAndRelevance,
   generateIntentBasedSummary,
-  getOffTopicTemplate,
   OjkIntent,
 } from '@/lib/ai/intent';
 
@@ -105,6 +104,60 @@ function formatConversationForSummary(messages: Awaited<ReturnType<typeof getMes
     .join('\n');
 }
 
+/** Mirrors client/UI messages for summarization (may include turns not persisted yet). */
+export type ClientMessageSnapshot = {
+  role: 'user' | 'assistant';
+  content: string;
+};
+
+const SUMMARY_SNAPSHOT_MAX_MESSAGES = 80;
+const SUMMARY_SNAPSHOT_MAX_CONTENT = 32000;
+
+export function normalizeClientMessageSnapshot(body: unknown): ClientMessageSnapshot[] | undefined {
+  if (!Array.isArray(body)) return undefined;
+  const out: ClientMessageSnapshot[] = [];
+  for (const item of body.slice(-SUMMARY_SNAPSHOT_MAX_MESSAGES)) {
+    if (!item || typeof item !== 'object') continue;
+    const o = item as { role?: unknown; content?: unknown };
+    if (o.role !== 'user' && o.role !== 'assistant') continue;
+    if (typeof o.content !== 'string') continue;
+    const trimmed = o.content.slice(0, SUMMARY_SNAPSHOT_MAX_CONTENT).trim();
+    if (!trimmed) continue;
+    out.push({ role: o.role, content: trimmed });
+  }
+  return out.length > 0 ? out : undefined;
+}
+
+function formatClientSnapshotForSummary(msgs: ClientMessageSnapshot[]): string {
+  const lastMessages = msgs.slice(-40);
+  return lastMessages
+    .map((message) => {
+      const role = message.role === 'assistant' ? 'Asisten' : 'User';
+      return `${role}: ${message.content}`;
+    })
+    .filter((line) => line.length > 0)
+    .join('\n');
+}
+
+function clientSnapshotToChats(msgs: ClientMessageSnapshot[]): Chats[] {
+  const now = new Date();
+  return msgs.map((m, i) => ({
+    id: `client-${i}`,
+    senderType: m.role === 'user' ? 'user' : 'assistant',
+    content: m.content,
+    status: null,
+    tokenCount: null,
+    modelName: null,
+    parentMessage: null,
+    turnIndex: null,
+    metadata: null,
+    createdAt: now,
+    updatedAt: now,
+    deletedAt: null,
+    chatId: '',
+  }));
+}
+
 function mapKnowledgeDocuments(
   documents: Awaited<ReturnType<typeof fetchAllAvailableDocuments>>
 ): AgenticKnowledgeDocument[] {
@@ -127,13 +180,11 @@ async function buildAgenticStreamSession({
   question,
   longTermMemory,
   shortTermMemory,
-  intent,
 }: {
   chatId: string;
   question: string;
   longTermMemory: string;
   shortTermMemory: Chats[] | [];
-  intent: OjkIntent;
 }) {
   const documents = await fetchAllAvailableDocuments();
   const availableDocuments = mapKnowledgeDocuments(documents);
@@ -141,7 +192,6 @@ async function buildAgenticStreamSession({
 
   const streamResult = createAgenticRagStream({
     question,
-    intent,
     longTermMemory,
     shortTermMemory,
     availableDocuments,
@@ -183,15 +233,6 @@ export async function startNewChatStream(userId: string | null, question: string
 
   const longTermMemory = "";
   const shortTermMemory: Chats[] | [] = [];
-  const intentClassification = await classifyIntentAndRelevance(question, shortTermMemory);
-
-  console.log('[IntentClassification][new-chat]', {
-    question,
-    intent: intentClassification.intent,
-    isOjkRelevant: intentClassification.isOjkRelevant,
-    confidence: intentClassification.confidence,
-    reason: intentClassification.reason,
-  });
 
   await createMessageRecord({
     senderType: 'user',
@@ -199,36 +240,11 @@ export async function startNewChatStream(userId: string | null, question: string
     chatId: chat.id,
   });
 
-  await persistIntentMetadata(chat.id, chat.metadata, question, intentClassification);
-
-  if (!intentClassification.isOjkRelevant) {
-    const blockedReply = getOffTopicTemplate();
-
-    await createMessageRecord({
-      senderType: 'assistant',
-      content: blockedReply,
-      chatId: chat.id,
-      modelName: DEFAULT_MODEL_NAME,
-      metadata: JSON.stringify({ intent: intentClassification.intent, blocked: true }),
-    });
-
-    const summary = await generateConversationSummary({
-      previousSummary: longTermMemory,
-      shortTermMemory,
-      question,
-      answer: blockedReply,
-    });
-    await updateChatSummary(chat.id, summary);
-
-    return { chatId: chat.id, blockedMessage: blockedReply };
-  }
-
   const streamResult = await buildAgenticStreamSession({
     chatId: chat.id,
     question,
     longTermMemory,
     shortTermMemory,
-    intent: intentClassification.intent,
   });
 
   return { chatId: chat.id, streamResult };
@@ -240,16 +256,6 @@ export async function continueChatStream(chatId: string, question: string) {
 
   const longTermMemory = chat.summary || "";
   const shortTermMemory = await getLastMessagesByChatId(chatId, 10);
-  const intentClassification = await classifyIntentAndRelevance(question, shortTermMemory as Chats[]);
-
-  console.log('[IntentClassification][existing-chat]', {
-    chatId,
-    question,
-    intent: intentClassification.intent,
-    isOjkRelevant: intentClassification.isOjkRelevant,
-    confidence: intentClassification.confidence,
-    reason: intentClassification.reason,
-  });
 
   await createMessageRecord({
     senderType: 'user',
@@ -257,59 +263,48 @@ export async function continueChatStream(chatId: string, question: string) {
     chatId: chat.id,
   });
 
-  await persistIntentMetadata(chat.id, chat.metadata, question, intentClassification);
-
-  if (!intentClassification.isOjkRelevant) {
-    const blockedReply = getOffTopicTemplate();
-
-    await createMessageRecord({
-      senderType: 'assistant',
-      content: blockedReply,
-      chatId: chat.id,
-      modelName: DEFAULT_MODEL_NAME,
-      metadata: JSON.stringify({ intent: intentClassification.intent, blocked: true }),
-    });
-
-    const summary = await generateConversationSummary({
-      previousSummary: longTermMemory,
-      shortTermMemory: shortTermMemory as Chats[],
-      question,
-      answer: blockedReply,
-    });
-    await updateChatSummary(chat.id, summary);
-
-    return { chatId: chat.id, blockedMessage: blockedReply };
-  }
-
   const streamResult = await buildAgenticStreamSession({
     chatId: chat.id,
     question,
     longTermMemory,
     shortTermMemory,
-    intent: intentClassification.intent,
   });
 
   return { chatId: chat.id, streamResult };
 }
 
-export async function generateChatIntentSummary(chatId: string) {
+export async function generateChatIntentSummary(
+  chatId: string,
+  options?: { clientMessages?: ClientMessageSnapshot[] }
+) {
   const chat = await getChatById(chatId);
   if (!chat) throw new Error('Chat not found');
 
-  const messages = await getMessagesByChatId(chatId);
-  const conversation = formatConversationForSummary(messages);
+  const dbMessages = await getMessagesByChatId(chatId);
+  const snapshot =
+    options?.clientMessages && options.clientMessages.length > 0
+      ? options.clientMessages
+      : undefined;
 
-  const metadata = parseChatMetadata(chat.metadata);
-  let intent = metadata.intent || 'Lainnya';
+  const conversation = snapshot
+    ? formatClientSnapshotForSummary(snapshot)
+    : formatConversationForSummary(dbMessages);
 
-  if (!intent || intent === 'Lainnya') {
-    const chatLikeMessages = toChatLikeMessages(messages).slice(-10);
-    const lastUserQuestion = [...messages].reverse().find((msg) => msg.senderType === 'user')?.content || '';
-    if (lastUserQuestion) {
-      const classification = await classifyIntentAndRelevance(lastUserQuestion, chatLikeMessages);
-      intent = classification.intent;
-      await persistIntentMetadata(chatId, chat.metadata, lastUserQuestion, classification);
-    }
+  const intentContextChats = snapshot
+    ? clientSnapshotToChats(snapshot)
+    : toChatLikeMessages(dbMessages);
+
+  const chatLikeMessages = intentContextChats.slice(-20);
+  const lastUserQuestion = snapshot
+    ? [...snapshot].reverse().find((m) => m.role === 'user')?.content?.trim() || ''
+    : [...dbMessages].reverse().find((msg) => msg.senderType === 'user')?.content || '';
+  let intent: OjkIntent = 'Lainnya';
+
+  const classificationText = conversation || lastUserQuestion;
+  if (classificationText) {
+    const classification = await classifyIntentAndRelevance(classificationText, chatLikeMessages);
+    intent = classification.intent;
+    await persistIntentMetadata(chatId, chat.metadata, lastUserQuestion || classificationText, classification);
   }
 
   const summary = await generateIntentBasedSummary(intent, conversation);

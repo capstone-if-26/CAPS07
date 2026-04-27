@@ -1,5 +1,6 @@
 import { generateText } from 'ai';
 import { model, routingModel } from '@/lib/openrouter';
+import { stripSummaryMarkdownArtifacts } from '@/lib/format-plain-summary';
 import { Chats } from '@/modules/chats/type';
 import { readFile } from 'fs/promises';
 import path from 'path';
@@ -64,105 +65,69 @@ function safeJsonParse(raw: string): unknown {
   return JSON.parse(clean);
 }
 
+function inferIntentFromText(text: string): OjkIntent | null {
+  const normalized = normalizeKey(text);
+
+  if (/\b(slik|riwayat kredit|ideb|kolektibilitas|skor kredit)\b/.test(normalized)) {
+    return 'Cek SLIK / Riwayat Kredit';
+  }
+
+  if (/\b(produk bank|panduan produk bank|tabungan|giro|deposito|kredit|kpr|perbankan)\b/.test(normalized)) {
+    return 'Panduan Produk Bank';
+  }
+
+  if (/\b(legalitas|legal|terdaftar ojk|pinjol ilegal|investasi bodong|cek pinjol|cek investasi)\b/.test(normalized)) {
+    return 'Cek Legalitas Pinjol/Investasi';
+  }
+
+  if (/\b(iasc|anti-scam centre|anti scam centre)\b/.test(normalized)) {
+    return 'IASC — Anti-Scam Centre';
+  }
+
+  if (/\b(kena tipu|ditipu|tertipu|lapor penipuan|mau lapor|pengaduan penipuan|korban penipuan)\b/.test(normalized)) {
+    return 'Lapor Penipuan (OJK / IASC)';
+  }
+
+  if (/\b(modus|ciri-ciri penipuan|cara kerja penipuan|menghindari penipuan|tips keamanan)\b/.test(normalized)) {
+    return 'Kenali Modus Penipuan';
+  }
+
+  if (/\b(hak konsumen|perlindungan konsumen|pelanggaran|jalur pengaduan|pengaduan konsumen)\b/.test(normalized)) {
+    return 'Hak Saya sebagai Konsumen';
+  }
+
+  if (/\b(investasi|kripto|crypto|saham|reksa dana|risiko investasi)\b/.test(normalized)) {
+    return 'Panduan Investasi & Kripto Aman';
+  }
+
+  if (/\b(literasi|tips keuangan|edukasi keuangan|keuangan harian|menabung|anggaran)\b/.test(normalized)) {
+    return 'Literasi & Tips Keuangan';
+  }
+
+  return null;
+}
+
+/** Keep classifier prompt small for latency (last turns only). */
+const INTENT_CONTEXT_TURNS = 4;
+
 function buildShortTermMemoryString(shortTermMemory: Chats[] | []): string {
   if (!shortTermMemory.length) {
     return 'Belum ada pesan terbaru.';
   }
 
-  return shortTermMemory
+  const recent = shortTermMemory.slice(-INTENT_CONTEXT_TURNS);
+
+  return recent
     .map((message) => `${message.senderType ?? 'unknown'}: ${message.content ?? ''}`)
     .join('\n');
 }
 
-function heuristicClassification(question: string): IntentClassification {
-  const q = question.toLowerCase();
-
-  if (/(tabung|deposito|giro|kpr|kredit bank|produk bank)/.test(q)) {
-    return {
-      intent: 'Panduan Produk Bank',
-      isOjkRelevant: true,
-      confidence: 0.7,
-      reason: 'Detected bank product keywords',
-    };
-  }
-
-  if (/(slik|riwayat kredit|bi checking)/.test(q)) {
-    return {
-      intent: 'Cek SLIK / Riwayat Kredit',
-      isOjkRelevant: true,
-      confidence: 0.8,
-      reason: 'Detected SLIK keywords',
-    };
-  }
-
-  if (/(pinjol|pinjaman online|legalitas investasi|investasi legal)/.test(q)) {
-    return {
-      intent: 'Cek Legalitas Pinjol/Investasi',
-      isOjkRelevant: true,
-      confidence: 0.8,
-      reason: 'Detected legality keywords',
-    };
-  }
-
-  if (/(kripto|crypto|investasi aman|profil risiko)/.test(q)) {
-    return {
-      intent: 'Panduan Investasi & Kripto Aman',
-      isOjkRelevant: true,
-      confidence: 0.75,
-      reason: 'Detected investment/crypto keywords',
-    };
-  }
-
-  if (/(penipuan|scam|phishing|modus)/.test(q)) {
-    return {
-      intent: 'Kenali Modus Penipuan',
-      isOjkRelevant: true,
-      confidence: 0.7,
-      reason: 'Detected fraud keywords',
-    };
-  }
-
-  if (/(iasc|anti-scam|rekening tujuan|transfer tertipu)/.test(q)) {
-    return {
-      intent: 'IASC — Anti-Scam Centre',
-      isOjkRelevant: true,
-      confidence: 0.8,
-      reason: 'Detected IASC keywords',
-    };
-  }
-
-  if (/(hak konsumen|pengaduan|komplain|sengketa)/.test(q)) {
-    return {
-      intent: 'Hak Saya sebagai Konsumen',
-      isOjkRelevant: true,
-      confidence: 0.7,
-      reason: 'Detected consumer rights keywords',
-    };
-  }
-
-  if (/(literasi|tips keuangan|budget|anggaran)/.test(q)) {
-    return {
-      intent: 'Literasi & Tips Keuangan',
-      isOjkRelevant: true,
-      confidence: 0.65,
-      reason: 'Detected financial literacy keywords',
-    };
-  }
-
-  if (/(rumus|silinder|integral|fisika|coding|programming|game|anime|resep)/.test(q)) {
-    return {
-      intent: 'Lainnya',
-      isOjkRelevant: false,
-      confidence: 0.9,
-      reason: 'Detected clearly out-of-domain topic',
-    };
-  }
-
+function intentClassifierFallback(): IntentClassification {
   return {
     intent: 'Lainnya',
     isOjkRelevant: true,
-    confidence: 0.4,
-    reason: 'Fallback to general OJK assistant intent',
+    confidence: 0,
+    reason: 'Intent classifier request failed; defaulting to in-domain',
   };
 }
 
@@ -171,47 +136,54 @@ export async function classifyIntentAndRelevance(
   shortTermMemory: Chats[] | []
 ): Promise<IntentClassification> {
   const memoryText = buildShortTermMemoryString(shortTermMemory);
+  const inferredIntent = inferIntentFromText(`${memoryText}\n${question}`);
 
-  const systemPrompt = `You classify OJK chatbot user intent.
+  const intentList = OJK_INTENTS.join(' | ');
 
-Return JSON only with this schema:
-{
-  "intent": "${OJK_INTENTS.join('" | "')}",
-  "isOjkRelevant": boolean,
-  "confidence": number,
-  "reason": string
-}
-
+  const systemPrompt = `OJK/financial consumer chatbot — classify conversation intent for summary generation only. Output JSON only, no markdown.
+Schema: {"intent":string,"isOjkRelevant":boolean,"confidence":number,"reason":string}
+intent must be exactly one of: ${intentList}
+reason: at most 6 words.
 Rules:
-- Mark isOjkRelevant=false only when the user request is clearly unrelated to OJK/financial consumer domain (e.g., math formula, coding, general science).
-- General stories or casual chat should still be treated as relevant and mapped to "Lainnya".
-- Choose exactly one intent from allowed values.`;
+- Use the full context and latest user question.
+- Bias isOjkRelevant=true for money, scams, tipu, banks, consumers, vague problems that may involve finance.
+- false only for obvious off-topic (school math, coding tutorials, games/anime, recipes).
+- Short follow-ups stay relevant if the thread is financial.
+- If the user is a victim, needs help after being scammed, wants to report fraud, asks what to do after "kena tipu", or describes a personal fraud/complaint case, choose "Lapor Penipuan (OJK / IASC)".
+- Choose "IASC — Anti-Scam Centre" only when the conversation explicitly asks about IASC/Indonesia Anti-Scam Centre itself or requirements/status for that channel.
+- Choose "Kenali Modus Penipuan" for education about scam patterns, examples, prevention, or general explanation without an active personal case.`;
 
-  const userPrompt = `Recent context:\n${memoryText}\n\nCurrent question:\n${question}`;
+  const userPrompt = `Context:\n${memoryText}\n\nQuestion:\n${question}`;
 
   try {
     const { text } = await generateText({
       model: routingModel,
       system: systemPrompt,
       prompt: userPrompt,
-      temperature: 0.1,
-      topP: 0.9,
+      temperature: 0,
+      maxOutputTokens: 96,
     });
 
     const parsed = safeJsonParse(text) as Partial<IntentClassification>;
 
-    const intent = OJK_INTENTS.includes(parsed.intent as OjkIntent)
+    const modelIntent = OJK_INTENTS.includes(parsed.intent as OjkIntent)
       ? (parsed.intent as OjkIntent)
       : 'Lainnya';
+    const intent = inferredIntent || modelIntent;
+
+    const rawRelevant = parsed.isOjkRelevant;
+    const isOjkRelevant =
+      typeof rawRelevant === 'boolean' ? rawRelevant : true;
 
     return {
       intent,
-      isOjkRelevant: Boolean(parsed.isOjkRelevant),
+      isOjkRelevant,
       confidence: clampConfidence(Number(parsed.confidence)),
       reason: String(parsed.reason || 'No reason provided by classifier'),
     };
   } catch {
-    return heuristicClassification(question);
+    const fallback = intentClassifierFallback();
+    return inferredIntent ? { ...fallback, intent: inferredIntent, confidence: 0.6, reason: 'Heuristic intent match' } : fallback;
   }
 }
 
@@ -281,6 +253,28 @@ export async function getIntentRequirements(intent: OjkIntent): Promise<string[]
   return requirements[intent] || [];
 }
 
+function ensureRequiredSummaryPoints(summary: string, requiredPoints: string[]): string {
+  if (requiredPoints.length === 0) {
+    return summary;
+  }
+
+  const existing = summary.trim();
+  const missingPoints = requiredPoints.filter((point) => {
+    const escapedPoint = point.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return !new RegExp(`(^|\\n)\\s*-?\\s*${escapedPoint}\\s*:`, 'i').test(existing);
+  });
+
+  if (missingPoints.length === 0) {
+    return existing;
+  }
+
+  const additions = missingPoints
+    .map((point) => `- ${point}: Tidak dibahas dalam percakapan.`)
+    .join('\n');
+
+  return existing ? `${existing}\n${additions}` : additions;
+}
+
 export async function generateIntentBasedSummary(
   intent: OjkIntent,
   conversation: string
@@ -294,11 +288,13 @@ export async function generateIntentBasedSummary(
   const systemPrompt = `You generate concise Indonesian summaries for OJK chatbot conversations.
 
 Rules:
-- Output in Markdown.
+- Output plain text only. No Markdown: no **, __, # headings, backticks, or link syntax.
+- You may use simple line breaks. For lists, use a hyphen and space at the start of each line (e.g. "- Poin: teks").
 - Keep only information explicitly present in the conversation.
-- Do not invent missing details.
-- If a required point is missing, skip it.
-- Use bullet list format with bold point names.
+- Do not invent missing details. If a required point is not present, still include that point and write "Tidak dibahas dalam percakapan."
+- Include every required summary point exactly once. Do not skip any required point.
+- Start each required point with its label, for example "- Jenis produk: ...".
+- Do not put labels in quotes for emphasis; write normally.
 - Keep it practical and concise.`;
 
   const requiredPointsText = requiredPoints.length > 0
@@ -314,7 +310,7 @@ Conversation:
 ${conversation}
 
 Instruction:
-Create markdown summary. Include only points that have evidence in the conversation.`;
+Write the summary in plain Indonesian text only. Include every required point above, in the same order. If there is no evidence for a point, write "Tidak dibahas dalam percakapan." for that point.`;
 
   try {
     const { text } = await generateText({
@@ -325,8 +321,9 @@ Create markdown summary. Include only points that have evidence in the conversat
       topP: 0.9,
     });
 
-    const summary = text.trim();
-    return summary || 'Ringkasan belum tersedia.';
+    const summary = stripSummaryMarkdownArtifacts(text.trim());
+    const completeSummary = ensureRequiredSummaryPoints(summary, requiredPoints);
+    return completeSummary || 'Ringkasan belum tersedia.';
   } catch {
     return 'Ringkasan belum dapat dibuat saat ini. Silakan coba lagi.';
   }

@@ -2,6 +2,7 @@ import { getMessageById } from '@/modules/messages/repository';
 import { continueChatStream } from '@/modules/chats/service';
 import { NextRequest } from 'next/server';
 import { buildSuccessResponse, buildFailedResponse } from '@/lib/utils/response';
+import { toAgenticEventStreamResponse } from '@/lib/ai/rag';
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -42,23 +43,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     console.log(`Melanjutkan chat ${chatId} untuk: ${question}`);
     const result = await continueChatStream(chatId, question);
 
-    if ('blockedMessage' in result) {
-      return new Response(result.blockedMessage, {
-        status: 200,
-        headers: {
-          'Content-Type': 'text/plain; charset=utf-8',
-          'Cache-Control': 'no-cache, no-transform',
-          'x-chat-id': result.chatId,
-        },
-      });
-    }
-
-    return result.streamResult.toTextStreamResponse({
-      headers: {
-        'Content-Type': 'text/plain; charset=utf-8',
-        'Cache-Control': 'no-cache, no-transform',
-        'x-chat-id': result.chatId,
-      },
+    return toAgenticEventStreamResponse(result.streamResult, {
+      'x-chat-id': result.chatId,
     });
 
   } catch (error: unknown) {

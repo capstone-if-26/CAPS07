@@ -2,6 +2,7 @@ import { startNewChatStream } from '@/modules/chats/service';
 import { NextRequest } from 'next/server';
 import { auth } from '@/lib/auth';
 import { buildSuccessResponse, buildFailedResponse } from '@/lib/utils/response';
+import { toAgenticEventStreamResponse } from '@/lib/ai/rag';
 
 export async function POST(req: NextRequest) {
   try {
@@ -26,23 +27,8 @@ export async function POST(req: NextRequest) {
     console.log(`Memproses chat baru untuk: ${question}`);
     const result = await startNewChatStream(userId, question);
 
-    if ('blockedMessage' in result) {
-      return new Response(result.blockedMessage, {
-        status: 200,
-        headers: {
-          'Content-Type': 'text/plain; charset=utf-8',
-          'Cache-Control': 'no-cache, no-transform',
-          'x-chat-id': result.chatId,
-        },
-      });
-    }
-
-    return result.streamResult.toTextStreamResponse({
-      headers: {
-        'Content-Type': 'text/plain; charset=utf-8',
-        'Cache-Control': 'no-cache, no-transform',
-        'x-chat-id': result.chatId,
-      },
+    return toAgenticEventStreamResponse(result.streamResult, {
+      'x-chat-id': result.chatId,
     });
 
   } catch (error: unknown) {

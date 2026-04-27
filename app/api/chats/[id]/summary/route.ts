@@ -1,6 +1,9 @@
 import { NextRequest } from 'next/server';
 import { buildFailedResponse, buildSuccessResponse } from '@/lib/utils/response';
-import { generateChatIntentSummary } from '@/modules/chats/service';
+import {
+  generateChatIntentSummary,
+  normalizeClientMessageSnapshot,
+} from '@/modules/chats/service';
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -10,7 +13,19 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       return buildFailedResponse('Chat ID diperlukan', null, 400);
     }
 
-    const result = await generateChatIntentSummary(chatId);
+    let clientMessages = undefined;
+    try {
+      const body: unknown = await req.json();
+      if (body && typeof body === 'object' && body !== null && 'messages' in body) {
+        clientMessages = normalizeClientMessageSnapshot(
+          (body as { messages: unknown }).messages
+        );
+      }
+    } catch {
+      /* empty or non-JSON body */
+    }
+
+    const result = await generateChatIntentSummary(chatId, { clientMessages });
 
     return buildSuccessResponse(result, 'Ringkasan intent berhasil dibuat', 200);
   } catch (error: unknown) {

@@ -1,7 +1,6 @@
 "use client"
 import { useState, useRef, useEffect } from "react"
 import Image from "next/image"
-import { Streamdown } from "streamdown"
 import {
   streamChatReply,
   getChatHistory,
@@ -10,6 +9,10 @@ import {
   getSavedChatId,
   clearChatId,
   type Message,
+  type ChatSource,
+  type ChatQuestion,
+  type ChatTaskEvent,
+  type IntentSummaryMessageSnapshot,
 } from "@/lib/api/chat"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -25,10 +28,36 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import {
+  Message as AIMessage,
+  MessageResponse,
+} from "@/components/ai-elements/message"
+import {
+  Source,
+  Sources,
+  SourcesContent,
+  SourcesTrigger,
+} from "@/components/ai-elements/sources"
+import {
+  Task,
+  TaskContent,
+  TaskItem,
+  TaskTrigger,
+} from "@/components/ai-elements/task"
+import { Loader2 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { formatSourceListingLine } from "@/lib/format-source-title"
 
-type UIMessage = { text: string; sender: "user" | "bot" }
+type UIMessage = {
+  text: string
+  sender: "user" | "bot"
+  sources?: ChatSource[]
+  question?: ChatQuestion
+  selectedQuestionChoice?: QuestionChoice
+  selectedQuestionCustomAnswer?: string
+}
 type ChatHistory = { id: string; title: string }
+type QuestionChoice = string | "custom"
 
 const QUICK_MENU = [
   "Cek Legalitas Pinjol / Investasi",
@@ -42,15 +71,14 @@ const QUICK_MENU = [
 ]
 
 const chatTooltipContentClass = cn(
-  "z-[10000] max-w-none border border-[#c21f26] bg-white px-2 py-1 text-[10px] font-semibold text-[#8C0000] shadow-[0_2px_6px_rgba(0,0,0,0.12)]",
-  "[&>svg]:bg-[#c21f26] [&>svg]:fill-[#c21f26]"
+  "z-[10000] max-w-none border border-[#c21f26] bg-white px-2 py-1 text-[10px] font-semibold text-[#8C0000] shadow-[0_2px_6px_rgba(0,0,0,0.12)]"
 )
 
 const chatBotBubbleBaseClass = cn(
-  "rounded-md border border-[#a11212] bg-[#f3f3f3] p-2 text-[12px] font-semibold leading-snug text-black wrap-break-word sm:p-1.5"
+  "rounded-md border border-[#a11212] bg-[#f3f3f3] p-2 text-[12px] font-normal leading-snug text-black wrap-break-word sm:p-1.5"
 )
 const chatUserBubbleBaseClass = cn(
-  "rounded-md border border-[#a11212] bg-[#a11212] p-2 text-[12px] font-semibold leading-snug text-white wrap-break-word sm:p-1.5"
+  "rounded-md border border-[#a11212] bg-[#a11212] p-2 text-[12px] font-normal leading-snug text-white wrap-break-word sm:p-1.5"
 )
 const chatBotBubbleClass = cn(
   chatBotBubbleBaseClass,
@@ -60,6 +88,93 @@ const chatUserBubbleClass = cn(
   chatUserBubbleBaseClass,
   "max-w-[min(100%,20rem)] sm:max-w-[min(100%,18rem)]"
 )
+
+function normalizeSourceTitle(value: string) {
+  return value.replace(/\s*\|\s*/g, " · ").replace(/\s+/g, " ").trim()
+}
+
+function parseSourcesFromText(text: string): { text: string; sources: ChatSource[] } {
+  const referenceMatch = text.match(/(?:^|\n)Referensi\s*:\s*([\s\S]*)$/i)
+  if (!referenceMatch || typeof referenceMatch.index !== "number") {
+    return { text, sources: [] }
+  }
+
+  const sources = referenceMatch[1]
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const match = line.match(/^[-*]\s*\[(\d+)\]\s*(.+)$/)
+      if (!match) return null
+
+      return {
+        href: "#",
+        title: `[${match[1]}] ${normalizeSourceTitle(match[2])}`,
+      }
+    })
+    .filter((source): source is ChatSource => Boolean(source))
+
+  return { text: text.slice(0, referenceMatch.index).trim(), sources }
+}
+
+function sourcesFromMetadata(metadata?: string | null): ChatSource[] {
+  if (!metadata) return []
+
+  try {
+    const parsed = JSON.parse(metadata) as { matches?: unknown }
+    if (!Array.isArray(parsed.matches)) return []
+
+    return parsed.matches
+      .map((match, index) => {
+        if (typeof match !== "object" || match === null || !("metadata" in match)) return null
+
+        const item = match as { metadata?: Record<string, unknown> }
+        const md = item.metadata || {}
+        const textPreview = String(md.text || "")
+          .replace(/\s+/g, " ")
+          .trim()
+
+        return {
+          href: "#",
+          title: formatSourceListingLine(`[${index + 1}]`, {
+            documentName: String(md.document_name || "Dokumen Internal OJK"),
+            sectionPath: String(md.section_path || ""),
+            chunkType: String(md.chunk_type || ""),
+            chunkIndex: md.chunk_index as string | number | null | undefined,
+            textPreview,
+          }),
+        }
+      })
+      .filter((source): source is ChatSource => Boolean(source))
+  } catch {
+    return []
+  }
+}
+
+function mergeSources(...groups: ChatSource[][]) {
+  const byTitle = new Map<string, ChatSource>()
+
+  for (const source of groups.flat()) {
+    if (!byTitle.has(source.title)) {
+      byTitle.set(source.title, source)
+    }
+  }
+
+  return Array.from(byTitle.values())
+}
+
+function getMessagePresentation(message: UIMessage) {
+  if (message.sender === "user") {
+    return { text: message.text, sources: [] }
+  }
+
+  const parsed = parseSourcesFromText(message.text)
+
+  return {
+    text: parsed.text,
+    sources: mergeSources(message.sources || [], parsed.sources),
+  }
+}
 
 function RiwayatItem({
   item,
@@ -109,22 +224,148 @@ function RiwayatItem({
   )
 }
 
+function FollowUpQuestion({
+  question,
+  selectedChoice,
+  customAnswer,
+  isLoading,
+  textareaRef,
+  onSelect,
+  onCustomAnswerChange,
+  onSubmit,
+}: {
+  question: ChatQuestion
+  selectedChoice: QuestionChoice | null
+  customAnswer: string
+  isLoading: boolean
+  textareaRef: React.RefObject<HTMLTextAreaElement | null>
+  onSelect: (choice: QuestionChoice) => void
+  onCustomAnswerChange: (value: string) => void
+  onSubmit: () => void
+}) {
+  const radioName = `follow-up-${question.id}`
+  const choices = question.options.slice(0, 4)
+  const canSubmit =
+    selectedChoice !== null &&
+    (selectedChoice !== "custom" || customAnswer.trim().length > 0)
+
+  return (
+    <div
+      className={cn(chatBotBubbleBaseClass, "w-full max-w-full overflow-hidden")}
+      role="group"
+      aria-label={question.question}
+    >
+      <p className="m-0 mb-2 leading-snug wrap-break-word sm:mb-1.5">{question.question}</p>
+      <div className="flex flex-col gap-2 sm:gap-1.5">
+        {choices.map((opt) => (
+          <label
+            key={opt.id}
+            className="flex cursor-pointer items-center gap-2 leading-snug"
+          >
+            <input
+              type="radio"
+              name={radioName}
+              value={opt.id}
+              checked={selectedChoice === opt.id}
+              onChange={() => onSelect(opt.id)}
+              className="sr-only"
+              disabled={isLoading}
+            />
+            <span
+              className={cn(
+                "relative flex h-4 w-4 shrink-0 items-center justify-center rounded-full border border-[#a11212] bg-white",
+                selectedChoice === opt.id && "ring-1 ring-white ring-inset"
+              )}
+              aria-hidden
+            >
+              <span
+                className={cn(
+                  "h-1.5 w-1.5 rounded-full bg-[#a11212] transition-opacity",
+                  selectedChoice === opt.id ? "opacity-100" : "opacity-0"
+                )}
+              />
+            </span>
+            <span className="min-w-0 flex-1 wrap-break-word">{opt.label}</span>
+          </label>
+        ))}
+
+        <label className="flex cursor-pointer items-center gap-2 leading-snug">
+          <input
+            type="radio"
+            name={radioName}
+            value="custom"
+            checked={selectedChoice === "custom"}
+            onChange={() => onSelect("custom")}
+            className="sr-only"
+            disabled={isLoading}
+          />
+          <span
+            className={cn(
+              "relative flex h-4 w-4 shrink-0 items-center justify-center rounded-full border border-[#a11212] bg-white",
+              selectedChoice === "custom" && "ring-1 ring-white ring-inset"
+            )}
+            aria-hidden
+          >
+            <span
+              className={cn(
+                "h-1.5 w-1.5 rounded-full bg-[#a11212] transition-opacity",
+                selectedChoice === "custom" ? "opacity-100" : "opacity-0"
+              )}
+            />
+          </span>
+          <span className="min-w-0 flex-1 wrap-break-word">{question.customOptionLabel}</span>
+        </label>
+
+        {selectedChoice === "custom" && (
+          <Textarea
+            ref={textareaRef}
+            value={customAnswer}
+            onChange={(event) => onCustomAnswerChange(event.target.value)}
+            placeholder="Tulis jawaban kamu..."
+            disabled={isLoading}
+            rows={1}
+            className="min-h-9 w-full resize-none overflow-hidden rounded border-[#a11212] bg-white px-2.5 py-2 text-[12px] leading-snug text-black shadow-none placeholder:text-[#a11212]/60 focus-visible:ring-[#a11212]/30 disabled:opacity-60"
+          />
+        )}
+
+        {!isLoading && selectedChoice !== null && (
+          <Button
+            type="button"
+            onClick={onSubmit}
+            disabled={isLoading || !canSubmit}
+            className="mt-1 h-8 self-start rounded border-0 bg-[#a11212] px-3 text-[12px] font-semibold text-white shadow-none hover:bg-[#8a0f0f] focus-visible:ring-[#a11212]/40 disabled:opacity-60"
+          >
+            Kirim
+          </Button>
+        )}
+      </div>
+    </div>
+  )
+}
+
 export default function FloatingMenu() {
   const [openChat, setOpenChat] = useState(false)
   const [openMenu, setOpenMenu] = useState(false)
   const [messages, setMessages] = useState<UIMessage[]>([])
   const [input, setInput] = useState("")
   const [isLoading, setIsLoading] = useState(false)
+  const [isAwaitingAssistantOutput, setIsAwaitingAssistantOutput] = useState(false)
+  const [tasks, setTasks] = useState<ChatTaskEvent[]>([])
   const [showScrollBtn, setShowScrollBtn] = useState(false)
 
   const [showDotMenu, setShowDotMenu] = useState(false)
   const [showRiwayat, setShowRiwayat] = useState(false)
   const [riwayatList, setRiwayatList] = useState<ChatHistory[]>([])
   const [copySuccess, setCopySuccess] = useState(false)
+  const [isSummaryCopyLoading, setIsSummaryCopyLoading] = useState(false)
+  const [pendingQuestion, setPendingQuestion] = useState<ChatQuestion | null>(null)
+  const [questionChoice, setQuestionChoice] = useState<QuestionChoice | null>(null)
+  const [customQuestionAnswer, setCustomQuestionAnswer] = useState("")
 
   const chatEndRef = useRef<HTMLDivElement>(null)
   const chatContainerRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const questionTextareaRef = useRef<HTMLTextAreaElement>(null)
 
   useEffect(() => { clearChatId(); setMessages([]) }, [])
 
@@ -138,6 +379,7 @@ export default function FloatingMenu() {
           setMessages(res.data.messages.map((m: Message) => ({
             text: m.content,
             sender: m.senderType === "user" ? "user" : "bot",
+            sources: m.senderType === "assistant" ? sourcesFromMetadata(m.metadata) : undefined,
           })))
         }
       })
@@ -164,17 +406,43 @@ export default function FloatingMenu() {
     if (el) { el.style.height = "auto"; el.style.height = Math.min(el.scrollHeight, 96) + "px" }
   }
 
+  const resetPendingQuestion = () => {
+    setPendingQuestion(null)
+    setQuestionChoice(null)
+    setCustomQuestionAnswer("")
+    if (questionTextareaRef.current) questionTextareaRef.current.style.height = "auto"
+  }
+
+  const handleCustomQuestionAnswerChange = (value: string) => {
+    setCustomQuestionAnswer(value)
+    const el = questionTextareaRef.current
+    if (el) {
+      el.style.height = "auto"
+      el.style.height = `${el.scrollHeight}px`
+    }
+  }
+
   const handleSend = async (customText?: string) => {
     const text = (customText ?? input).trim()
     if (!text || isLoading) return
-    setMessages((p) => [...p, { text, sender: "user" }, { text: "", sender: "bot" }])
+    const activeQuestion = pendingQuestion
+    const questionForModel = activeQuestion
+      ? `Jawaban untuk pertanyaan "${activeQuestion.question}": ${text}`
+      : text
+    setMessages((p) => [...p, { text, sender: "user" }])
     if (!customText) { setInput(""); if (textareaRef.current) textareaRef.current.style.height = "auto" }
+    if (activeQuestion) resetPendingQuestion()
     setIsLoading(true)
+    setIsAwaitingAssistantOutput(true)
+    setTasks([])
     try {
       const currentChatId = getSavedChatId()
+      let hasAssistantOutput = false
+      let currentAssistantMessageIndex: number | null = null
+      let questionAskedThisTurn = false
 
       await streamChatReply({
-        question: text,
+        question: questionForModel,
         chatId: currentChatId,
         onChatId: (resolvedChatId) => {
           if (!currentChatId) {
@@ -187,39 +455,132 @@ export default function FloatingMenu() {
         },
         onToken: (chunk) => {
           if (!chunk) return
+          if (questionAskedThisTurn) return
+          hasAssistantOutput = true
+          setIsAwaitingAssistantOutput(false)
           setMessages((p) => {
-            if (!p.length) return [{ text: chunk, sender: "bot" }]
-
-            const updated = [...p]
-            let botIndex = updated.length - 1
-            while (botIndex >= 0 && updated[botIndex].sender !== "bot") {
-              botIndex--
+            if (!p.length) {
+              currentAssistantMessageIndex = 0
+              return [{ text: chunk, sender: "bot" }]
             }
 
-            if (botIndex === -1) {
+            const updated = [...p]
+            const messageIndex = currentAssistantMessageIndex
+            if (messageIndex === null) {
+              currentAssistantMessageIndex = updated.length
               updated.push({ text: chunk, sender: "bot" })
               return updated
             }
 
-            const botMessage = updated[botIndex]
-            updated[botIndex] = { ...botMessage, text: `${botMessage.text}${chunk}` }
+            const existingMessage = updated[messageIndex]
+
+            if (!existingMessage || existingMessage.sender !== "bot") {
+              currentAssistantMessageIndex = updated.length
+              updated.push({ text: chunk, sender: "bot" })
+              return updated
+            }
+
+            updated[messageIndex] = {
+              ...existingMessage,
+              text: `${existingMessage.text}${chunk}`,
+            }
+            return updated
+          })
+        },
+        onTask: (task) => {
+          setTasks((prev) => {
+            const index = prev.findIndex((item) => item.title === task.title)
+            if (index === -1) return [...prev, task]
+
+            const updated = [...prev]
+            updated[index] = task
+            return updated
+          })
+        },
+        onSource: (source) => {
+          if (questionAskedThisTurn) return
+          hasAssistantOutput = true
+          setIsAwaitingAssistantOutput(false)
+          setMessages((p) => {
+            const updated = [...p]
+            const messageIndex = currentAssistantMessageIndex
+            if (messageIndex === null) {
+              currentAssistantMessageIndex = updated.length
+              updated.push({ text: "", sender: "bot", sources: [source] })
+              return updated
+            }
+
+            const existingMessage = updated[messageIndex]
+
+            if (!existingMessage || existingMessage.sender !== "bot") {
+              currentAssistantMessageIndex = updated.length
+              updated.push({ text: "", sender: "bot", sources: [source] })
+              return updated
+            }
+
+            const sources = mergeSources(existingMessage.sources || [], [source])
+            updated[messageIndex] = { ...existingMessage, sources }
+            return updated
+          })
+        },
+        onQuestion: (question) => {
+          hasAssistantOutput = true
+          questionAskedThisTurn = true
+          setIsAwaitingAssistantOutput(false)
+          const nextQuestion = {
+            ...question,
+            options: question.options.slice(0, 4),
+            customOptionLabel: question.customOptionLabel || "Tulis jawaban kamu",
+          }
+          setPendingQuestion(nextQuestion)
+          setQuestionChoice(null)
+          setCustomQuestionAnswer("")
+          setMessages((p) => {
+            const updated = [...p]
+            const messageIndex = currentAssistantMessageIndex
+            if (messageIndex === null) {
+              currentAssistantMessageIndex = updated.length
+              updated.push({ text: "", sender: "bot", question: nextQuestion })
+              return updated
+            }
+
+            const existingMessage = updated[messageIndex]
+
+            if (!existingMessage || existingMessage.sender !== "bot") {
+              currentAssistantMessageIndex = updated.length
+              updated.push({ text: "", sender: "bot", question: nextQuestion })
+              return updated
+            }
+
+            updated[messageIndex] = {
+              text: "",
+              sender: "bot",
+              question: nextQuestion,
+            }
             return updated
           })
         },
       })
 
-      setMessages((p) => {
-        if (!p.length) return p
-        const updated = [...p]
-        const lastIndex = updated.length - 1
-        const lastMessage = updated[lastIndex]
+      if (!hasAssistantOutput) {
+        setMessages((p) => {
+          if (!p.length) return p
+          const updated = [...p]
+          const lastIndex = updated.length - 1
+          const lastMessage = updated[lastIndex]
 
-        if (lastMessage.sender === "bot" && !lastMessage.text.trim()) {
-          updated[lastIndex] = { text: "Maaf, terjadi kesalahan pada server.", sender: "bot" }
-        }
+          if (lastMessage.sender === "bot" && !lastMessage.text.trim()) {
+            updated[lastIndex] = { text: "Maaf, terjadi kesalahan pada server.", sender: "bot" }
+            return updated
+          }
 
-        return updated
-      })
+          if (lastMessage.sender === "user") {
+            updated.push({ text: "Maaf, terjadi kesalahan pada server.", sender: "bot" })
+          }
+
+          return updated
+        })
+      }
     } catch {
       setMessages((p) => {
         if (!p.length) return [{ text: "Maaf, tidak dapat terhubung ke server. Silakan coba beberapa saat lagi.", sender: "bot" }]
@@ -236,10 +597,36 @@ export default function FloatingMenu() {
         updated.push({ text: "Maaf, tidak dapat terhubung ke server. Silakan coba beberapa saat lagi.", sender: "bot" })
         return updated
       })
-    } finally { setIsLoading(false) }
+    } finally { setIsLoading(false); setIsAwaitingAssistantOutput(false); setTasks([]) }
   }
 
-  const handleChatBaru = () => { clearChatId(); setMessages([]); setShowDotMenu(false); setShowRiwayat(false) }
+  const handleQuestionSubmit = () => {
+    if (!pendingQuestion || !questionChoice) return
+
+    const selectedOption = pendingQuestion.options.find((option) => option.id === questionChoice)
+    const answer = questionChoice === "custom" ? customQuestionAnswer.trim() : selectedOption?.label.trim()
+    if (!answer) return
+
+    const submittedQuestionId = pendingQuestion.id
+    const submittedChoice = questionChoice
+    const submittedCustomAnswer = customQuestionAnswer.trim()
+
+    setMessages((prev) =>
+      prev.map((message) =>
+        message.question?.id === submittedQuestionId
+          ? {
+              ...message,
+              selectedQuestionChoice: submittedChoice,
+              selectedQuestionCustomAnswer: submittedCustomAnswer,
+            }
+          : message
+      )
+    )
+
+    handleSend(answer)
+  }
+
+  const handleChatBaru = () => { clearChatId(); setMessages([]); resetPendingQuestion(); setShowDotMenu(false); setShowRiwayat(false) }
 
   const handleHapusRiwayat = (id: string) => {
     setRiwayatList((prev) => {
@@ -257,39 +644,90 @@ export default function FloatingMenu() {
     saveChatId(id)
     getChatHistory(id).then((res) => {
       if (res.status && res.data.messages.length > 0)
-        setMessages(res.data.messages.map((m: Message) => ({ text: m.content, sender: m.senderType === "user" ? "user" : "bot" })))
+        setMessages(res.data.messages.map((m: Message) => ({
+          text: m.content,
+          sender: m.senderType === "user" ? "user" : "bot",
+          sources: m.senderType === "assistant" ? sourcesFromMetadata(m.metadata) : undefined,
+        })))
+      resetPendingQuestion()
     }).catch(() => {})
     setShowRiwayat(false)
   }
 
   const handleCopy = () => {
-    if (!messages.length) return
+    if (!messages.length || isSummaryCopyLoading) return
 
     const chatId = getSavedChatId()
     const fallbackSummary = messages.map((m) => `${m.sender === "user" ? "Saya" : "ROJAK"}: ${m.text}`).join("\n\n")
 
-    const copyText = (value: string) => {
-      navigator.clipboard.writeText(value)
-        .then(() => { setCopySuccess(true); setTimeout(() => setCopySuccess(false), 2000) })
+    const finishSuccess = () => {
+      setCopySuccess(true)
+      setTimeout(() => setCopySuccess(false), 2000)
     }
 
-    if (!chatId) {
-      copyText(fallbackSummary)
-      return
-    }
-
-    getIntentSummary(chatId)
-      .then((res) => {
-        if (res.status && res.data.summary) {
-          copyText(res.data.summary)
-          return
+    void (async () => {
+      if (!chatId) {
+        try {
+          await navigator.clipboard.writeText(fallbackSummary)
+          finishSuccess()
+        } catch {
+          /* clipboard denied or unsupported */
         }
+        return
+      }
 
-        copyText(fallbackSummary)
-      })
-      .catch(() => {
-        copyText(fallbackSummary)
-      })
+      setIsSummaryCopyLoading(true)
+      try {
+        const messagesSnapshot: IntentSummaryMessageSnapshot[] = messages
+          .map((m): IntentSummaryMessageSnapshot => ({
+            role: m.sender === "user" ? "user" : "assistant",
+            content: m.text.trim(),
+          }))
+          .filter((m) => m.content.length > 0)
+
+        const textPromise = getIntentSummary(chatId, messagesSnapshot)
+          .then((res) => {
+            if (res.status && res.data.summary) return res.data.summary
+            return fallbackSummary
+          })
+          .catch(() => fallbackSummary)
+
+        if (typeof ClipboardItem !== "undefined" && navigator.clipboard?.write) {
+          const blobPromise = textPromise.then((text) => new Blob([text], { type: "text/plain" }))
+          await navigator.clipboard.write([
+            new ClipboardItem({
+              "text/plain": blobPromise,
+            }),
+          ])
+          finishSuccess()
+        } else {
+          const text = await textPromise
+          try {
+            await navigator.clipboard.writeText(text)
+            finishSuccess()
+          } catch {
+            const ta = document.createElement("textarea")
+            ta.value = text
+            ta.setAttribute("readonly", "")
+            ta.style.position = "fixed"
+            ta.style.left = "0"
+            ta.style.top = "0"
+            ta.style.opacity = "0"
+            document.body.appendChild(ta)
+            ta.select()
+            try {
+              if (document.execCommand("copy")) finishSuccess()
+            } finally {
+              document.body.removeChild(ta)
+            }
+          }
+        }
+      } catch {
+        /* Clipboard write failed */
+      } finally {
+        setIsSummaryCopyLoading(false)
+      }
+    })()
   }
 
   const handleToggleRiwayat = () => {
@@ -300,6 +738,8 @@ export default function FloatingMenu() {
   const handleAutoScroll = () => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" })
   }
+
+  const showReasoningWhileLoading = isLoading && isAwaitingAssistantOutput
 
   return (
     <>
@@ -317,9 +757,11 @@ export default function FloatingMenu() {
         .bot-markdown p { margin: 0 0 0.4em 0; }
         .bot-markdown ul, .bot-markdown ol { margin: 4px 0 6px 0; padding-left: 16px; }
         .bot-markdown li { margin: 2px 0; }
+        .bot-markdown strong, .bot-markdown b { font-weight: 700; }
         .bot-markdown h1, .bot-markdown h2, .bot-markdown h3, .bot-markdown h4 { margin: 0 0 6px 0; font-size: inherit; }
         .bot-markdown code { font-size: 0.75rem; }
         .bot-markdown pre { margin: 6px 0; overflow-x: auto; }
+        .chat-task-content > div { margin-top: 0.35rem; border-left-color: rgba(161,18,18,0.45); padding-left: 0.6rem; }
         @keyframes slideInRiwayat {
           from { opacity: 0; transform: translateY(6px); }
           to   { opacity: 1; transform: translateY(0); }
@@ -372,7 +814,7 @@ export default function FloatingMenu() {
             )}
           </div>
 
-          <div className="flex h-[100dvh] flex-col items-center justify-start overflow-hidden bg-[#850C12] pt-6 pb-6 sm:block sm:bg-transparent">
+          <div className="flex h-dvh flex-col items-center justify-start overflow-hidden bg-[#850C12] pt-6 pb-6 sm:block sm:bg-transparent">
             <div
                 style={{ border: "1.5px solid #a11212" }}
                 className="
@@ -382,7 +824,7 @@ export default function FloatingMenu() {
                   bg-[#f3f3f3]
                   shadow-[0_6px_18px_rgba(0,0,0,0.18)]
                   sm:fixed sm:right-18 sm:bottom-28
-                  p-3 sm:p-2
+                  p-4 sm:py-3 sm:px-3
                   flex flex-col
                   rounded-2xl sm:rounded-xl
                   pointer-events-auto
@@ -542,16 +984,16 @@ export default function FloatingMenu() {
                     )}
                   >
                     <p className="m-0">
-                      Hai Sobat OJK! 👋
+                      <span className="font-bold">Hai Sobat OJK! 👋</span>
                       <br />
                       <br />
-                      Kenalin, aku ROJAK (Robot Penjawab Kontak OJK) yang siap bantu kamu 😊
+                      Kenalin, aku <span className="font-bold">ROJAK</span> (Robot Penjawab Kontak OJK) yang siap bantu kamu 😊
                       <br />
                       <br />
                       Mau cari info apa hari ini? Pilih aja layanan di bawah atau ketik langsung ya 👇
                     </p>
                   </div>
-                  
+
                   {messages.length === 0 && (
                     <div className="grid w-full shrink-0 grid-cols-2 items-stretch gap-1 sm:gap-1">
                       {QUICK_MENU.map((label, i) => (
@@ -560,7 +1002,7 @@ export default function FloatingMenu() {
                           type="button"
                           onClick={() => handleSend(label)}
                           disabled={isLoading}
-                          className="inline-flex h-full min-h-[2.9rem] w-full min-w-0 shrink-1 items-center justify-center rounded border-0 bg-[#a11212] px-1.5 py-1.5 text-white whitespace-normal shadow-none hover:bg-[#8a0f0f] focus-visible:ring-[#a11212]/40 sm:min-h-[2.5rem] sm:px-1 sm:py-1"
+                          className="inline-flex h-full min-h-[2.9rem] w-full min-w-0 shrink items-center justify-center rounded border-0 bg-[#a11212] px-1.5 py-1.5 text-white whitespace-normal shadow-none hover:bg-[#8a0f0f] focus-visible:ring-[#a11212]/40 sm:min-h-10 sm:px-1 sm:py-1"
                         >
                           <span className="line-clamp-2 w-full max-w-full text-center text-[10px] font-semibold leading-tight wrap-anywhere">
                             {label}
@@ -570,50 +1012,122 @@ export default function FloatingMenu() {
                     </div>
                   )}
 
-                  <div className="w-full flex-1 space-y-2.5 sm:space-y-1.5">
-                    {messages.map((msg, i) => (
-                      <div
-                        key={i}
-                        className={`flex w-full ${msg.sender === "user" ? "justify-end" : "justify-start"}`}
-                      >
-                        <div
-                          className={
-                            msg.sender === "user" ? chatUserBubbleClass : chatBotBubbleClass
-                          }
-                        >
-                          {msg.sender === "user" ? (
-                            <span className="wrap-break-word whitespace-pre-wrap">{msg.text}</span>
-                          ) : (
-                            <Streamdown parseIncompleteMarkdown className="bot-markdown wrap-break-word">
-                              {msg.text}
-                            </Streamdown>
-                          )}
-                        </div>
-                      </div>
-                    ))}
+                  <div className="w-full shrink-0 space-y-2.5 sm:space-y-1.5">
+                    {messages.map((msg, i) => {
+                      const presentation = getMessagePresentation(msg)
+                      const isUser = msg.sender === "user"
+                      const suppressSources =
+                        !isUser && isLoading && i === messages.length - 1
+                      const showSources =
+                        !isUser && presentation.sources.length > 0 && !suppressSources
+                      const isActiveQuestion =
+                        !isUser && Boolean(msg.question) && pendingQuestion?.id === msg.question?.id
 
-                    {isLoading && (
-                      <div className="flex w-full items-start justify-start gap-1.5">
-                        {/* <Image
-                          src="/ikon-chtbot2.png"
-                          alt=""
-                          width={18}
-                          height={18}
-                          className="mt-0.5 shrink-0 rounded-full border border-[#a11212] opacity-90"
-                          aria-hidden
-                        /> */}
-                        {/* <div className={cn("flex min-h-9 sm:min-h-8 items-center gap-1.5", chatBotBubbleClass)}>
-                          <span className="inline-block h-1.5 w-1.5 rounded-full bg-[#a11212] dot-1" />
-                          <span className="inline-block h-1.5 w-1.5 rounded-full bg-[#a11212] dot-2" />
-                          <span className="inline-block h-1.5 w-1.5 rounded-full bg-[#a11212] dot-3" />
-                        </div> */}
-                      </div>
+                      if (!isUser && !presentation.text.trim() && !showSources && !msg.question) {
+                        return null
+                      }
+
+                      return (
+                        <AIMessage
+                          key={i}
+                          from={isUser ? "user" : "assistant"}
+                          className={cn("max-w-full gap-1", isUser ? "items-end" : "items-start")}
+                        >
+                          {presentation.text.trim() && (
+                            <div
+                              className={isUser ? chatUserBubbleClass : chatBotBubbleClass}
+                            >
+                            {isUser ? (
+                              <span className="wrap-break-word whitespace-pre-wrap">{presentation.text}</span>
+                            ) : (
+                              <MessageResponse parseIncompleteMarkdown className="bot-markdown wrap-break-word">
+                                {presentation.text}
+                              </MessageResponse>
+                            )}
+                            </div>
+                          )}
+
+                          {showSources && (
+                            <Sources className="mb-0 ml-0 mt-0.5 max-w-[min(100%,20rem)] text-[12px] font-normal text-[#a11212] sm:max-w-[min(100%,18rem)]">
+                              <SourcesTrigger
+                                count={presentation.sources.length}
+                                className="rounded border border-[#a11212]/35 bg-white px-2 py-1 text-[12px] text-[#a11212] hover:bg-red-50"
+                              >
+                                <span>Referensi ({presentation.sources.length})</span>
+                                <span className="text-[12px] leading-none">⌄</span>
+                              </SourcesTrigger>
+                              <SourcesContent className="mt-1 w-full max-w-full gap-1 rounded border border-[#a11212]/25 bg-white p-2 shadow-[0_2px_6px_rgba(0,0,0,0.08)]">
+                                {presentation.sources.map((source, sourceIndex) => (
+                                  <Source
+                                    key={`${source.title}-${sourceIndex}`}
+                                    href={source.href}
+                                    title={source.title}
+                                    className="text-[12px] font-normal leading-snug text-gray-800 [&_span]:text-[12px] [&_span]:font-normal"
+                                  />
+                                ))}
+                              </SourcesContent>
+                            </Sources>
+                          )}
+
+                          {msg.question && (
+                            <FollowUpQuestion
+                              question={msg.question}
+                              selectedChoice={isActiveQuestion ? questionChoice : msg.selectedQuestionChoice || null}
+                              customAnswer={isActiveQuestion ? customQuestionAnswer : msg.selectedQuestionCustomAnswer || ""}
+                              isLoading={!isActiveQuestion || isLoading}
+                              textareaRef={questionTextareaRef}
+                              onSelect={setQuestionChoice}
+                              onCustomAnswerChange={handleCustomQuestionAnswerChange}
+                              onSubmit={handleQuestionSubmit}
+                            />
+                          )}
+                        </AIMessage>
+                      )
+                    })}
+
+                    {showReasoningWhileLoading && tasks.length === 0 && (
+                      <AIMessage from="assistant" className="max-w-full gap-1">
+                        <div className={chatBotBubbleClass}>
+                          <div className="flex items-center gap-1.5 text-[12px] font-semibold text-[#a11212]">
+                            <span className="inline-block h-1.5 w-1.5 rounded-full bg-[#a11212] dot-1" />
+                            <span>Sedang berpikir...</span>
+                          </div>
+                        </div>
+                      </AIMessage>
+                    )}
+                    {showReasoningWhileLoading && tasks.length > 0 && (
+                      <AIMessage from="assistant" className="max-w-full gap-1">
+                        <div className={chatBotBubbleClass}>
+                          <Task defaultOpen>
+                            <TaskTrigger title={tasks.at(-1)?.title || "Sedang berpikir"} className="w-full">
+                              <div className="flex w-full cursor-pointer items-center gap-1.5 text-[12px] font-semibold text-[#a11212]">
+                                <span className="inline-block h-1.5 w-1.5 rounded-full bg-[#a11212] dot-1" />
+                                <span className="min-w-0 flex-1">{tasks.at(-1)?.title || "Sedang berpikir"}...</span>
+                                <span className="text-[10px] leading-none">⌄</span>
+                              </div>
+                            </TaskTrigger>
+                            <TaskContent className="chat-task-content">
+                              {tasks.map((task) => (
+                                <TaskItem
+                                  key={task.title}
+                                  className={cn(
+                                    "text-[11px] font-semibold leading-snug",
+                                    task.status === "error" ? "text-[#a11212]" : task.status === "done" ? "text-gray-600" : "text-[#a11212]"
+                                  )}
+                                >
+                                  {task.detail ? `${task.title} ${task.detail}...` : `${task.title}...`}
+                                </TaskItem>
+                              ))}
+                            </TaskContent>
+                          </Task>
+                        </div>
+                      </AIMessage>
                     )}
                     <div ref={chatEndRef} />
                   </div>
                 </div>
 
-                <div className="mt-2 flex shrink-0 items-end gap-1.5 pt-1 sm:mt-1.5 sm:gap-1 sm:pt-0.5">
+                <div className="mt-auto flex shrink-0 items-end gap-1.5 pt-2 sm:gap-1 sm:pt-1">
                   <Textarea
                     ref={textareaRef}
                     value={input}
@@ -659,17 +1173,21 @@ export default function FloatingMenu() {
                         <Button
                           type="button"
                           onClick={handleCopy}
-                          className="h-9 w-9 min-w-9 shrink-0 rounded border-0 bg-[#a11212] p-0 text-white shadow-none hover:opacity-80 focus-visible:ring-[#a11212]/40 sm:h-8 sm:w-8 sm:min-w-8"
+                          disabled={isSummaryCopyLoading}
+                          aria-busy={isSummaryCopyLoading}
+                          className="h-9 w-9 min-w-9 shrink-0 rounded border-0 bg-[#a11212] p-0 text-white shadow-none hover:opacity-80 focus-visible:ring-[#a11212]/40 disabled:opacity-70 sm:h-8 sm:w-8 sm:min-w-8"
                         >
                           {copySuccess ? (
                             <span className="text-xs font-bold">✓</span>
+                          ) : isSummaryCopyLoading ? (
+                            <Loader2 className="size-[15px] animate-spin sm:size-3.5" aria-hidden />
                           ) : (
                             <Image src="/ikon-salin.png" alt="salin" width={15} height={15} quality={100} />
                           )}
                         </Button>
                       </TooltipTrigger>
                       <TooltipContent side="top" align="end" sideOffset={6} className={chatTooltipContentClass}>
-                        Salin Ringkasan
+                        {isSummaryCopyLoading ? "Menyusun ringkasan…" : "Salin Ringkasan"}
                       </TooltipContent>
                     </Tooltip>
                   </div>

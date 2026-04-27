@@ -1,9 +1,29 @@
 import { generateText, stepCountIs, streamText, tool } from 'ai';
 import { model } from '@/lib/openrouter';
 import { retrieveRelevantChunks } from '@/lib/pinecone/utils';
+import { stripSummaryMarkdownArtifacts } from '@/lib/format-plain-summary';
+import { formatSourceListingLine } from '@/lib/format-source-title';
 import { ScoredPineconeRecord, RecordMetadata } from '@pinecone-database/pinecone';
 import { Chats } from '@/modules/chats/type';
 import { z } from 'zod';
+
+export type AgenticRagStreamEvent =
+  | { type: 'task'; status: 'running' | 'done' | 'error'; title: string; detail?: string }
+  | { type: 'source'; source: { title: string; href: string } }
+  | { type: 'question'; question: AgenticQuestion }
+  | { type: 'text'; text: string };
+
+export type AgenticQuestionOption = {
+  id: string;
+  label: string;
+};
+
+export type AgenticQuestion = {
+  id: string;
+  question: string;
+  options: AgenticQuestionOption[];
+  customOptionLabel: string;
+};
 
 export function formatRetrievedContext(
   matches: ScoredPineconeRecord<RecordMetadata>[],
@@ -50,7 +70,6 @@ export interface AgenticRagFinishPayload {
 
 export interface AgenticRagStreamParams {
   question: string;
-  intent: string;
   longTermMemory: string;
   shortTermMemory: Chats[] | [];
   availableDocuments: AgenticKnowledgeDocument[];
@@ -149,6 +168,64 @@ function buildShortTermMemoryString(shortTermMemory: Chats[] | []): string {
     .join('\n');
 }
 
+function shouldForceQuestionTool(question: string): boolean {
+  const normalizedQuestion = question.toLowerCase();
+
+  if (/^jawaban untuk pertanyaan\b/i.test(normalizedQuestion)) {
+    return false;
+  }
+
+  const personalCasePattern =
+    /\b(rekening saya|akun saya|uang saya|data saya|korban|kena tipu|kena penipuan|ditipu|tertipu|tipu|penipuan|scam|fraud|bodong|dibobol|uang hilang|hilang uang|rugi|kerugian|mau lapor|ingin lapor|bagaimana melapor|tidak tahu mau bagaimana|nggak tahu mau bagaimana|gak tahu mau bagaimana|tolong bantu|bantu saya|pinjol meneror|diteror|ancaman|transaksi mencurigakan|salah transfer)\b/i;
+  const generalExplanationPattern =
+    /\b(apa itu|jelaskan|definisi|contoh modus|tips|edukasi|literasi|peraturan|regulasi|pasal|syarat|prosedur umum)\b/i;
+
+  return personalCasePattern.test(normalizedQuestion) && !generalExplanationPattern.test(normalizedQuestion);
+}
+
+function createQuestionId(question: string): string {
+  const slug = question
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 32);
+
+  return `question-${slug || 'follow-up'}-${Date.now().toString(36)}`;
+}
+
+function normalizeQuestionToolInput(input: unknown): AgenticQuestion | null {
+  if (typeof input !== 'object' || input === null) return null;
+
+  const value = input as {
+    question?: unknown;
+    options?: unknown;
+    customOptionLabel?: unknown;
+  };
+  const question = String(value.question || '').trim();
+  if (!question) return null;
+
+  const options = Array.isArray(value.options)
+    ? value.options
+        .map((option, index) => ({
+          id: `option-${index + 1}`,
+          label: String(option || '').trim(),
+        }))
+        .filter((option) => option.label.length > 0)
+        .slice(0, 4)
+    : [];
+
+  if (options.length === 0) return null;
+
+  const customOptionLabel = String(value.customOptionLabel || 'Tulis jawaban kamu').trim();
+
+  return {
+    id: createQuestionId(question),
+    question,
+    options,
+    customOptionLabel: customOptionLabel || 'Tulis jawaban kamu',
+  };
+}
+
 export function createAgenticRagStream(params: AgenticRagStreamParams) {
   const availableNamespaces = normalizeNamespaces(
     params.availableDocuments.map((doc) => doc.namespace)
@@ -163,9 +240,11 @@ export function createAgenticRagStream(params: AgenticRagStreamParams) {
   const shortTermMemoryStr = buildShortTermMemoryString(params.shortTermMemory);
   const docsCatalog = buildDocsCatalog(params.availableDocuments);
   const retrievedMatches: RetrievedMatch[] = [];
+  const askedQuestions: AgenticQuestion[] = [];
   const citationIndexByChunkId = new Map<string, number>();
   const citationMatchMap = new Map<number, RetrievedMatch>();
   let nextCitationIndex = 1;
+  const forceQuestionTool = shouldForceQuestionTool(params.question);
 
   const systemPrompt = `You are Sahabat Keuangan, an assistant for OJK.
 
@@ -176,6 +255,13 @@ Decision policy:
 - For policy, regulation, legal-financial, and internal-document questions, call retrieve_policy_context first.
 - If answer confidence is low, call retrieve_policy_context before finalizing the answer.
 - You may call the tool multiple times with refined queries.
+- Ask follow-up questions frequently when the user describes a personal case, incident, complaint, fraud, loss, transaction problem, loan/investment issue, account problem, insurance claim, debt collection, bank/fintech/e-wallet problem, or says something broad like "Saya kena tipu", "Saya mau lapor", "Saya bermasalah", "akun saya dibobol", "uang saya hilang", or "pinjol meneror saya".
+- For case intake, prefer ask_user_question before giving a final answer unless the user already provided enough specifics to act. Ask one focused question at a time, starting with the most important missing detail, such as case type, product/institution, chronology, amount/date, current status, or desired help.
+- Keep case intake short: ask only 1 to 3 follow-up question turns for one case, then give practical next steps based on what is known.
+- Use ask_user_question with up to four ready-made options because the interface always adds one custom answer option. Keep options short and mutually distinct. If you decide to ask_user_question, call that tool first in the assistant turn and do not write a final answer before or after it. After calling ask_user_question, do not guess; wait for the user's next answer.
+- NEVER write a multiple-answer or multiple-choice question as a normal text response. ALWAYS use ask_user_question for any follow-up question that has selectable answers/options.
+- A normal text response must not contain answer choices like "A/B/C", numbered options, radio options, "pilih salah satu", or similar multiple-answer question formats. Those must be sent only through ask_user_question.
+- If the user answers a follow-up question through normal chat text, treat it as the answer to the pending question and continue the case intake or guidance.
 
 Response rules:
 - Respond in Indonesian.
@@ -183,8 +269,7 @@ Response rules:
 - Never reveal chain-of-thought, internal planning, or tool mechanics.
 - If relevant context still does not contain the answer, reply exactly: "Saya tidak dapat menemukan informasi tersebut dalam dokumen kebijakan yang tersedia."
 - If you used retrieved context, cite with chunk indices like [1], [2].
-- After your answer, include a short "Referensi" section that maps each used citation number to document name and section path.
-- The reference format must be markdown bullets, for example: "- [1] POJK X | section: Bab I/Definisi".`;
+- Do not include a "Referensi" section in the answer. Source details are rendered separately by the interface.`;
 
   const userPrompt = `Long-term memory (summary):
 ${params.longTermMemory || 'Belum ada percakapan sebelumnya.'}
@@ -198,17 +283,16 @@ ${docsCatalog}
 Current user question:
 ${params.question}`;
 
-  const promptWithIntent = `${userPrompt}
-
-Recognized intent category: ${params.intent}`;
-
   return streamText({
     model,
     system: systemPrompt,
-    prompt: promptWithIntent,
+    prompt: userPrompt,
     temperature: 0.2,
     topP: 0.9,
-    stopWhen: stepCountIs(4),
+    stopWhen: forceQuestionTool ? stepCountIs(1) : stepCountIs(4),
+    toolChoice: forceQuestionTool
+      ? { type: 'tool', toolName: 'ask_user_question' }
+      : 'auto',
     tools: {
       retrieve_policy_context: tool({
         description:
@@ -251,6 +335,11 @@ Recognized intent category: ${params.intent}`;
               citationMatchMap.set(citationNumber, match);
             }
 
+            const textPreview = String(match.metadata.text || '')
+              .replace(/\s+/g, ' ')
+              .trim()
+              .slice(0, 400);
+
             return {
               citationNumber,
               citation: `[${citationNumber}]`,
@@ -258,6 +347,9 @@ Recognized intent category: ${params.intent}`;
               score: Number(match.score.toFixed(4)),
               documentName: String(match.metadata.document_name || ''),
               sectionPath: String(match.metadata.section_path || ''),
+              chunkType: String(match.metadata.chunk_type || ''),
+              chunkIndex: match.metadata.chunk_index,
+              textPreview,
             };
           });
 
@@ -267,6 +359,27 @@ Recognized intent category: ${params.intent}`;
             namespacesUsed: namespacesToUse,
             context: formatRetrievedContext(matches, 1800, citationIndexByChunkId),
             sources: sourcesWithCitation,
+          };
+        },
+      }),
+      ask_user_question: tool({
+        description:
+          'Ask the user a follow-up question with radio options. ALWAYS use this tool instead of normal text for clarification questions that include selectable answers/options.',
+        inputSchema: z.object({
+          question: z.string().min(1).max(220),
+          options: z.array(z.string().min(1).max(80)).min(1).max(4),
+          customOptionLabel: z.string().min(1).max(80).optional(),
+        }),
+        execute: async (input) => {
+          const question = normalizeQuestionToolInput(input);
+          if (question) {
+            askedQuestions.push(question);
+          }
+
+          return {
+            status: 'question_sent',
+            instruction: 'Wait for the user to answer this question before continuing.',
+            question,
           };
         },
       }),
@@ -295,12 +408,178 @@ Recognized intent category: ${params.intent}`;
       });
     },
     onFinish: async ({ text }) => {
-      const answerWithReferences = buildReferenceAppendix(text.trim(), citationMatchMap);
+      const trimmedText = text.trim();
+      const latestQuestion = askedQuestions.at(-1);
+      const answerText = latestQuestion
+        ? `Pertanyaan lanjutan: ${latestQuestion.question}`
+        : trimmedText;
+      const answerWithReferences = buildReferenceAppendix(answerText, citationMatchMap);
 
       await params.onFinish?.({
         answer: answerWithReferences,
         matches: dedupeMatches(retrievedMatches),
       });
+    },
+  });
+}
+
+const encoder = new TextEncoder();
+
+function formatAgenticEvent(event: AgenticRagStreamEvent): Uint8Array {
+  return encoder.encode(`data: ${JSON.stringify(event)}\n\n`);
+}
+
+function getToolQuery(input: unknown): string {
+  if (typeof input === 'object' && input !== null && 'query' in input) {
+    return String((input as { query?: unknown }).query || '');
+  }
+
+  return '';
+}
+
+function getQuestionEvent(input: unknown): AgenticRagStreamEvent | null {
+  const question = normalizeQuestionToolInput(input);
+  if (!question) return null;
+
+  return {
+    type: 'question',
+    question,
+  };
+}
+
+function getSourceEvents(output: unknown): AgenticRagStreamEvent[] {
+  if (typeof output !== 'object' || output === null || !('sources' in output)) {
+    return [];
+  }
+
+  const sources = (output as { sources?: unknown }).sources;
+  if (!Array.isArray(sources)) {
+    return [];
+  }
+
+  return sources.flatMap((source) => {
+    if (typeof source !== 'object' || source === null) return [];
+
+    const item = source as {
+      citation?: unknown;
+      documentName?: unknown;
+      sectionPath?: unknown;
+      chunkType?: unknown;
+      chunkIndex?: unknown;
+      textPreview?: unknown;
+    };
+    const citation = String(item.citation || '');
+    const documentName = String(item.documentName || 'Dokumen Internal OJK');
+    const sectionPath = String(item.sectionPath || '');
+    const chunkType = String(item.chunkType || '');
+    const chunkIndex = item.chunkIndex;
+    const textPreview = String(item.textPreview || '');
+
+    return [{
+      type: 'source' as const,
+      source: {
+        href: '#',
+        title: formatSourceListingLine(citation, {
+          documentName,
+          sectionPath,
+          chunkType,
+          chunkIndex: chunkIndex as string | number | null | undefined,
+          textPreview,
+        }),
+      },
+    }];
+  });
+}
+
+export function toAgenticEventStreamResponse(
+  streamResult: ReturnType<typeof createAgenticRagStream>,
+  headers: HeadersInit
+) {
+  const eventStream = streamResult.fullStream.pipeThrough(
+    new TransformStream({
+      transform(chunk, controller) {
+        switch (chunk.type) {
+          case 'start':
+            controller.enqueue(formatAgenticEvent({
+              type: 'task',
+              status: 'running',
+              title: 'Sedang berpikir',
+            }));
+            break;
+
+          case 'tool-call': {
+            if (chunk.toolName === 'ask_user_question') {
+              controller.enqueue(formatAgenticEvent({
+                type: 'task',
+                status: 'running',
+                title: 'Menyiapkan pertanyaan',
+              }));
+              const questionEvent = getQuestionEvent(chunk.input);
+              if (questionEvent) {
+                controller.enqueue(formatAgenticEvent(questionEvent));
+              }
+              break;
+            }
+
+            const query = getToolQuery(chunk.input);
+            controller.enqueue(formatAgenticEvent({
+              type: 'task',
+              status: 'running',
+              title: 'Mencari dokumen',
+              detail: query ? `"${query}"` : undefined,
+            }));
+            break;
+          }
+
+          case 'tool-result':
+            if (chunk.toolName === 'ask_user_question') {
+              break;
+            }
+
+            controller.enqueue(formatAgenticEvent({
+              type: 'task',
+              status: 'done',
+              title: 'Membaca dokumen',
+            }));
+            for (const event of getSourceEvents(chunk.output)) {
+              controller.enqueue(formatAgenticEvent(event));
+            }
+            break;
+
+          case 'text-start':
+            controller.enqueue(formatAgenticEvent({
+              type: 'task',
+              status: 'running',
+              title: 'Membuat jawaban',
+            }));
+            break;
+
+          case 'text-delta':
+            controller.enqueue(formatAgenticEvent({
+              type: 'text',
+              text: chunk.text,
+            }));
+            break;
+
+          case 'tool-error':
+          case 'error':
+            controller.enqueue(formatAgenticEvent({
+              type: 'task',
+              status: 'error',
+              title: 'Terjadi kendala saat memproses',
+            }));
+            break;
+        }
+      },
+    })
+  );
+
+  return new Response(eventStream, {
+    status: 200,
+    headers: {
+      ...headers,
+      'Content-Type': 'text/event-stream; charset=utf-8',
+      'Cache-Control': 'no-cache, no-transform',
     },
   });
 }
@@ -314,7 +593,7 @@ Rules:
 - Respond in Indonesian.
 - Produce one concise cumulative summary paragraph.
 - Keep important user intent, constraints, and resolved points.
-- Do not use markdown or bullet points.`;
+- Plain text only: no markdown (no **, __, #, backticks, bullets, or link syntax).`;
 
   const userPrompt = `Previous summary:\n${params.previousSummary || 'Belum ada ringkasan sebelumnya.'}
 
@@ -335,7 +614,7 @@ Write an updated cumulative summary.`;
       topP: 0.9,
     });
 
-    const summary = text.trim();
+    const summary = stripSummaryMarkdownArtifacts(text.trim());
     return summary || params.previousSummary || '';
   } catch {
     return params.previousSummary || '';

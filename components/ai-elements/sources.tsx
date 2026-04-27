@@ -59,19 +59,41 @@ export const SourcesContent = ({
 
 export type SourceProps = ComponentProps<"a">;
 
-export const Source = ({ href, title, children, ...props }: SourceProps) => (
-  <a
-    className="flex items-center gap-2"
-    href={href}
-    rel="noreferrer"
-    target="_blank"
-    {...props}
-  >
-    {children ?? (
+export const Source = ({
+  href,
+  title,
+  children,
+  className,
+  ...props
+}: SourceProps) => {
+  const body =
+    children ?? (
       <>
-        <BookIcon className="h-4 w-4" />
-        <span className="block font-medium">{title}</span>
+        <BookIcon className="mt-0.5 h-4 w-4 shrink-0 text-current" />
+        <span className="min-w-0 flex-1 whitespace-pre-wrap wrap-break-word font-medium leading-snug">
+          {title}
+        </span>
       </>
-    )}
-  </a>
-);
+    );
+
+  const rowClass = cn(
+    "flex min-w-0 max-w-full flex-row flex-nowrap items-start gap-2",
+    className
+  );
+
+  if (!href || href === "#") {
+    return <div className={rowClass}>{body}</div>;
+  }
+
+  return (
+    <a
+      className={rowClass}
+      href={href}
+      rel="noreferrer"
+      target="_blank"
+      {...props}
+    >
+      {body}
+    </a>
+  );
+};
