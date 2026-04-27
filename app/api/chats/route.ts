@@ -1,4 +1,4 @@
-import { processNewChat } from '@/modules/chats/service';
+import { startNewChatStream } from '@/modules/chats/service';
 import { NextRequest } from 'next/server';
 import { auth } from '@/lib/auth';
 import { buildSuccessResponse, buildFailedResponse } from '@/lib/utils/response';
@@ -24,13 +24,26 @@ export async function POST(req: NextRequest) {
     const userId = session?.user?.id || null;
 
     console.log(`Memproses chat baru untuk: ${question}`);
-    const result = await processNewChat(userId, question);
+    const result = await startNewChatStream(userId, question);
 
-    return buildSuccessResponse({
-      chatId: result.chat.id,
-      answer: result.ragResponse.answer,
-      matches: result.ragResponse.matches
-    }, "Chat berhasil diproses", 200);
+    if ('blockedMessage' in result) {
+      return new Response(result.blockedMessage, {
+        status: 200,
+        headers: {
+          'Content-Type': 'text/plain; charset=utf-8',
+          'Cache-Control': 'no-cache, no-transform',
+          'x-chat-id': result.chatId,
+        },
+      });
+    }
+
+    return result.streamResult.toTextStreamResponse({
+      headers: {
+        'Content-Type': 'text/plain; charset=utf-8',
+        'Cache-Control': 'no-cache, no-transform',
+        'x-chat-id': result.chatId,
+      },
+    });
 
   } catch (error: unknown) {
     let message = 'Terjadi kesalahan internal';
@@ -44,5 +57,5 @@ export async function POST(req: NextRequest) {
 }
 
 export async function GET() {
-  return buildSuccessResponse({ status: "active" }, "Endpoint POST /api/chats siap melayani kueri RAG", 200);
+  return buildSuccessResponse({ status: "active" }, "Endpoint POST /api/chats siap melayani stream agentic RAG", 200);
 }

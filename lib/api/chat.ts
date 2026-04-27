@@ -6,24 +6,15 @@ export interface Message {
   senderType: "user" | "assistant"
 }
 
-export interface StartChatResponse {
-  status: boolean
-  message: string
-  data: {
-    chatId: string
-    answer: string
-    matches: unknown[]
-  }
+export interface StreamChatParams {
+  question: string
+  chatId?: string | null
+  onToken: (chunk: string) => void
+  onChatId?: (chatId: string) => void
 }
 
-export interface ContinueChatResponse {
-  status: boolean
-  message: string
-  data: {
-    chatId: string
-    answer: string
-    matches: unknown[]
-  }
+export interface StreamChatResult {
+  chatId: string
 }
 
 export interface ChatHistoryResponse {
@@ -35,37 +26,87 @@ export interface ChatHistoryResponse {
   }
 }
 
-// Mulai obrolan BARU (belum ada chatId)
-export async function startNewChat(question: string): Promise<StartChatResponse> {
-  const res = await fetch(`${BASE_URL}/api/chats`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ question }),
-  })
-
-  if (!res.ok) {
-    throw new Error(`Gagal memulai chat: ${res.status} ${res.statusText}`)
+export interface IntentSummaryResponse {
+  status: boolean
+  message: string
+  data: {
+    chatId: string
+    intent: string
+    summary: string
   }
-
-  return res.json()
 }
 
-// Lanjutkan obrolan yang sudah ada (ada chatId)
-export async function continueChat(
-  chatId: string,
-  question: string
-): Promise<ContinueChatResponse> {
-  const res = await fetch(`${BASE_URL}/api/chats/${chatId}/messages`, {
+async function parseErrorMessage(res: Response): Promise<string> {
+  const fallback = `Permintaan chat gagal: ${res.status} ${res.statusText}`
+
+  let raw = ""
+  try {
+    raw = await res.text()
+  } catch {
+    return fallback
+  }
+
+  if (!raw) return fallback
+
+  try {
+    const payload = JSON.parse(raw)
+    if (payload?.message) {
+      return String(payload.message)
+    }
+  } catch {
+    // ignore JSON parse error
+  }
+
+  return raw
+}
+
+async function consumeTextStream(res: Response, onToken: (chunk: string) => void): Promise<void> {
+  const reader = res.body?.getReader()
+  if (!reader) {
+    throw new Error("Response stream tidak tersedia")
+  }
+
+  const decoder = new TextDecoder()
+
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+
+    const chunk = decoder.decode(value, { stream: true })
+    if (chunk) {
+      onToken(chunk)
+    }
+  }
+
+  const trailing = decoder.decode()
+  if (trailing) {
+    onToken(trailing)
+  }
+}
+
+export async function streamChatReply({ question, chatId, onToken, onChatId }: StreamChatParams): Promise<StreamChatResult> {
+  const endpoint = chatId ? `/api/chats/${chatId}/messages` : "/api/chats"
+
+  const res = await fetch(`${BASE_URL}${endpoint}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ question }),
   })
 
   if (!res.ok) {
-    throw new Error(`Gagal melanjutkan chat: ${res.status} ${res.statusText}`)
+    throw new Error(await parseErrorMessage(res))
   }
 
-  return res.json()
+  const resolvedChatId = res.headers.get("x-chat-id") || chatId || ""
+  if (!resolvedChatId) {
+    throw new Error("Chat ID tidak ditemukan pada respons stream")
+  }
+
+  onChatId?.(resolvedChatId)
+
+  await consumeTextStream(res, onToken)
+
+  return { chatId: resolvedChatId }
 }
 
 // Ambil history chat (saat refresh halaman)
@@ -77,6 +118,19 @@ export async function getChatHistory(chatId: string): Promise<ChatHistoryRespons
 
   if (!res.ok) {
     throw new Error(`Gagal mengambil history: ${res.status} ${res.statusText}`)
+  }
+
+  return res.json()
+}
+
+export async function getIntentSummary(chatId: string): Promise<IntentSummaryResponse> {
+  const res = await fetch(`${BASE_URL}/api/chats/${chatId}/summary`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+  })
+
+  if (!res.ok) {
+    throw new Error(await parseErrorMessage(res))
   }
 
   return res.json()

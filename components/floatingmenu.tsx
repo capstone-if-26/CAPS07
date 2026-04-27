@@ -1,10 +1,11 @@
 "use client"
 import { useState, useRef, useEffect } from "react"
 import Image from "next/image"
+import { Streamdown } from "streamdown"
 import {
-  startNewChat,
-  continueChat,
+  streamChatReply,
   getChatHistory,
+  getIntentSummary,
   saveChatId,
   getSavedChatId,
   clearChatId,
@@ -287,25 +288,75 @@ export default function FloatingMenu() {
   const handleSend = async (customText?: string) => {
     const text = (customText ?? input).trim()
     if (!text || isLoading) return
-    setMessages((p) => [...p, { text, sender: "user" }])
+    setMessages((p) => [...p, { text, sender: "user" }, { text: "", sender: "bot" }])
     if (!customText) { setInput(""); if (textareaRef.current) textareaRef.current.style.height = "auto" }
     setIsLoading(true)
     try {
-      const chatId = getSavedChatId()
-      let answer = ""
-      if (!chatId) {
-        const res = await startNewChat(text)
-        if (res.status) {
-          saveChatId(res.data.chatId); answer = res.data.answer
-          setRiwayatList((p) => [{ id: res.data.chatId, title: text.length > 40 ? text.substring(0, 40) + "..." : text }, ...p])
+      const currentChatId = getSavedChatId()
+
+      await streamChatReply({
+        question: text,
+        chatId: currentChatId,
+        onChatId: (resolvedChatId) => {
+          if (!currentChatId) {
+            saveChatId(resolvedChatId)
+            setRiwayatList((p) => {
+              if (p.some((item) => item.id === resolvedChatId)) return p
+              return [{ id: resolvedChatId, title: text.length > 40 ? text.substring(0, 40) + "..." : text }, ...p]
+            })
+          }
+        },
+        onToken: (chunk) => {
+          if (!chunk) return
+          setMessages((p) => {
+            if (!p.length) return [{ text: chunk, sender: "bot" }]
+
+            const updated = [...p]
+            let botIndex = updated.length - 1
+            while (botIndex >= 0 && updated[botIndex].sender !== "bot") {
+              botIndex--
+            }
+
+            if (botIndex === -1) {
+              updated.push({ text: chunk, sender: "bot" })
+              return updated
+            }
+
+            const botMessage = updated[botIndex]
+            updated[botIndex] = { ...botMessage, text: `${botMessage.text}${chunk}` }
+            return updated
+          })
+        },
+      })
+
+      setMessages((p) => {
+        if (!p.length) return p
+        const updated = [...p]
+        const lastIndex = updated.length - 1
+        const lastMessage = updated[lastIndex]
+
+        if (lastMessage.sender === "bot" && !lastMessage.text.trim()) {
+          updated[lastIndex] = { text: "Maaf, terjadi kesalahan pada server.", sender: "bot" }
         }
-      } else {
-        const res = await continueChat(chatId, text)
-        if (res.status) answer = res.data.answer
-      }
-      setMessages((p) => [...p, { text: answer || "Maaf, terjadi kesalahan pada server.", sender: "bot" }])
+
+        return updated
+      })
     } catch {
-      setMessages((p) => [...p, { text: "Maaf, tidak dapat terhubung ke server. Silakan coba beberapa saat lagi.", sender: "bot" }])
+      setMessages((p) => {
+        if (!p.length) return [{ text: "Maaf, tidak dapat terhubung ke server. Silakan coba beberapa saat lagi.", sender: "bot" }]
+
+        const updated = [...p]
+        const lastIndex = updated.length - 1
+        const lastMessage = updated[lastIndex]
+
+        if (lastMessage.sender === "bot" && !lastMessage.text.trim()) {
+          updated[lastIndex] = { text: "Maaf, tidak dapat terhubung ke server. Silakan coba beberapa saat lagi.", sender: "bot" }
+          return updated
+        }
+
+        updated.push({ text: "Maaf, tidak dapat terhubung ke server. Silakan coba beberapa saat lagi.", sender: "bot" })
+        return updated
+      })
     } finally { setIsLoading(false) }
   }
 
@@ -337,8 +388,32 @@ export default function FloatingMenu() {
 
   const handleCopy = () => {
     if (!messages.length) return
-    navigator.clipboard.writeText(messages.map((m) => `${m.sender === "user" ? "Saya" : "ROJAK"}: ${m.text}`).join("\n\n"))
-      .then(() => { setCopySuccess(true); setTimeout(() => setCopySuccess(false), 2000) })
+
+    const chatId = getSavedChatId()
+    const fallbackSummary = messages.map((m) => `${m.sender === "user" ? "Saya" : "ROJAK"}: ${m.text}`).join("\n\n")
+
+    const copyText = (value: string) => {
+      navigator.clipboard.writeText(value)
+        .then(() => { setCopySuccess(true); setTimeout(() => setCopySuccess(false), 2000) })
+    }
+
+    if (!chatId) {
+      copyText(fallbackSummary)
+      return
+    }
+
+    getIntentSummary(chatId)
+      .then((res) => {
+        if (res.status && res.data.summary) {
+          copyText(res.data.summary)
+          return
+        }
+
+        copyText(fallbackSummary)
+      })
+      .catch(() => {
+        copyText(fallbackSummary)
+      })
   }
 
   const handleToggleRiwayat = () => {
@@ -359,6 +434,12 @@ export default function FloatingMenu() {
         .dot-2 { animation: pulse-dot 1.2s infinite 0.2s; }
         .dot-3 { animation: pulse-dot 1.2s infinite 0.4s; }
         .dot-menu-item:hover { background-color: rgba(140,0,0,0.08); color: #8C0000; }
+        .bot-markdown p { margin: 0 0 6px 0; }
+        .bot-markdown ul, .bot-markdown ol { margin: 4px 0 6px 0; padding-left: 16px; }
+        .bot-markdown li { margin: 2px 0; }
+        .bot-markdown h1, .bot-markdown h2, .bot-markdown h3, .bot-markdown h4 { margin: 0 0 6px 0; font-size: inherit; }
+        .bot-markdown code { font-size: 10px; }
+        .bot-markdown pre { margin: 6px 0; overflow-x: auto; }
         @keyframes slideInRiwayat {
           from { opacity: 0; transform: translateY(6px); }
           to   { opacity: 1; transform: translateY(0); }
@@ -552,7 +633,13 @@ export default function FloatingMenu() {
                     {messages.map((msg, i) => (
                       <div key={i} className="max-w-[85%] mx-auto flex flex-col">
                         <div className={`inline-block p-1.5 rounded-md text-[11px] leading-tight font-semibold max-w-full break-words ${msg.sender === "user" ? "bg-[#a11212] text-white self-end border border-[#a11212]" : "bg-[#f3f3f3] text-black self-start border border-[#a11212]"}`}>
-                          <span className="break-words whitespace-pre-wrap">{msg.text}</span>
+                          {msg.sender === "user" ? (
+                            <span className="break-words whitespace-pre-wrap">{msg.text}</span>
+                          ) : (
+                            <Streamdown parseIncompleteMarkdown className="bot-markdown break-words">
+                              {msg.text}
+                            </Streamdown>
+                          )}
                         </div>
                       </div>
                     ))}
