@@ -11,11 +11,25 @@ import {
   clearChatId,
   type Message,
 } from "@/lib/api/chat"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { cn } from "@/lib/utils"
 
 type UIMessage = { text: string; sender: "user" | "bot" }
 type ChatHistory = { id: string; title: string }
 
-// Menu cepat (shortcut pertanyaan)
 const QUICK_MENU = [
   "Cek Legalitas Pinjol / Investasi",
   "Hak Saya sebagai Konsumen Keuangan",
@@ -27,187 +41,70 @@ const QUICK_MENU = [
   "Cara Lapor / Pengaduan ke OJK",
 ]
 
-// Tooltip component
-function Tooltip({
-  label,
-  anchor = "center",
-  dir = "up",
-}: {
-  label: string
-  anchor?: "center" | "right" | "left"
-  dir?: "up" | "down"
-}) {
-  const posStyle: React.CSSProperties =
-    anchor === "right"
-      ? { right: 0, left: "auto", transform: "none" }
-      : anchor === "left"
-      ? { left: 0, right: "auto", transform: "none" }
-      : { left: "50%", transform: "translateX(-50%)" }
+const chatTooltipContentClass = cn(
+  "z-[10000] max-w-none border border-[#c21f26] bg-white px-2 py-1 text-[10px] font-semibold text-[#8C0000] shadow-[0_2px_6px_rgba(0,0,0,0.12)]",
+  "[&>svg]:bg-[#c21f26] [&>svg]:fill-[#c21f26]"
+)
 
-  const arrowLeft = anchor === "right" ? "auto" : anchor === "left" ? "10px" : "50%"
-  const arrowRight = anchor === "right" ? "8px" : "auto"
-  const arrowTransform = anchor === "center" ? "translateX(-50%)" : "none"
+const chatBotBubbleBaseClass = cn(
+  "rounded-md border border-[#a11212] bg-[#f3f3f3] p-2 text-[12px] font-semibold leading-snug text-black wrap-break-word sm:p-1.5"
+)
+const chatUserBubbleBaseClass = cn(
+  "rounded-md border border-[#a11212] bg-[#a11212] p-2 text-[12px] font-semibold leading-snug text-white wrap-break-word sm:p-1.5"
+)
+const chatBotBubbleClass = cn(
+  chatBotBubbleBaseClass,
+  "max-w-[min(100%,20rem)] sm:max-w-[min(100%,18rem)]"
+)
+const chatUserBubbleClass = cn(
+  chatUserBubbleBaseClass,
+  "max-w-[min(100%,20rem)] sm:max-w-[min(100%,18rem)]"
+)
 
-  const boxPos: React.CSSProperties =
-    dir === "down"
-      ? { top: "calc(100% + 6px)", bottom: "auto" }
-      : { bottom: "calc(100% + 6px)", top: "auto" }
-
-  return (
-    <div style={{
-      position: "absolute",
-      ...boxPos,
-      ...posStyle,
-      background: "white",
-      color: "#8C0000",
-      fontSize: "9px",
-      fontWeight: 600,
-      padding: "3px 7px",
-      borderRadius: "4px",
-      whiteSpace: "nowrap",
-      border: "0.5px solid #c21f26",
-      pointerEvents: "none",
-      zIndex: 9999,
-      boxShadow: "0 2px 6px rgba(0,0,0,0.12)",
-    }}>
-      {label}
-      {dir === "down" ? (
-        /* panah ke atas (tooltip di bawah elemen) */
-        <span style={{
-          position: "absolute", bottom: "100%",
-          left: arrowLeft, right: arrowRight, transform: arrowTransform,
-          width: 0, height: 0,
-          borderLeft: "4px solid transparent", borderRight: "4px solid transparent",
-          borderBottom: "4px solid #c21f26",
-        }} />
-      ) : (
-        /* panah ke bawah (tooltip di atas elemen) */
-        <span style={{
-          position: "absolute", top: "100%",
-          left: arrowLeft, right: arrowRight, transform: arrowTransform,
-          width: 0, height: 0,
-          borderLeft: "4px solid transparent", borderRight: "4px solid transparent",
-          borderTop: "4px solid #c21f26",
-        }} />
-      )}
-    </div>
-  )
-}
-
-// Dropdown hapus
-function HapusDropdown({
-  itemId,
-  btnRef,
-  onHapus,
-  onClose,
-}: {
-  itemId: string
-  btnRef: React.RefObject<HTMLButtonElement>
-  onHapus: (id: string) => void
-  onClose: () => void
-}) {
-  const [pos, setPos] = useState<{ top: number; left: number } | null>(null)
-
-  useEffect(() => {
-    if (btnRef.current) {
-      const rect = btnRef.current.getBoundingClientRect()
-      setPos({
-        top: rect.top - 4,
-        left: rect.right - 85,
-      })
-    }
-  }, [btnRef])
-
-  useEffect(() => {
-    const fn = (e: MouseEvent) => {
-      if (btnRef.current && !btnRef.current.contains(e.target as Node)) {
-        onClose()
-      }
-    }
-    document.addEventListener("mousedown", fn)
-    return () => document.removeEventListener("mousedown", fn)
-  }, [btnRef, onClose])
-
-  if (!pos) return null
-
-  return (
-    <div
-      style={{
-        position: "fixed",
-        top: pos.top,
-        left: pos.left,
-        transform: "translateY(-100%)",
-        background: "white",
-        border: "0.8px solid #c21f26",
-        borderRadius: "4px",
-        boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
-        minWidth: "85px",
-        zIndex: 99999,
-      }}
-      onMouseDown={(e) => e.stopPropagation()}
-    >
-      <button
-        onMouseDown={(e) => {
-          e.preventDefault()
-          e.stopPropagation()
-          onHapus(itemId)
-          onClose()
-        }}
-        className="w-full text-left px-2 py-1.5 text-[10px] font-semibold text-gray-900 hover:bg-red-50 flex items-center gap-1.5 transition"
-      >
-        <Image src="/ikon-hapus.png" alt="hapus" width={11} height={11} />
-        Hapus
-      </button>
-    </div>
-  )
-}
-
-// Item riwayat
 function RiwayatItem({
   item,
-  isActive,
-  onToggleMenu,
   onHapus,
   onLoad,
-  onCloseMenu,
 }: {
   item: ChatHistory
-  isActive: boolean
-  onToggleMenu: (id: string) => void
   onHapus: (id: string) => void
   onLoad: (id: string) => void
-  onCloseMenu: () => void
 }) {
-  const btnRef = useRef<HTMLButtonElement>(null!)
-
   return (
-    <div className="flex items-center justify-between px-3 py-1 hover:bg-red-50 transition group relative">
-      <button
+    <div className="group relative flex items-center justify-between px-3 py-1 transition hover:bg-red-50">
+      <Button
+        type="button"
+        variant="ghost"
         onClick={() => onLoad(item.id)}
-        className="flex-1 text-left text-[10px] font-semibold text-gray-800 truncate pr-2 group-hover:text-[#a11212] transition"
+        className="h-auto flex-1 justify-start px-0 py-0 pr-2 text-left text-xs font-semibold text-gray-800 hover:bg-transparent hover:text-[#a11212] group-hover:text-[#a11212]"
       >
-        {item.title}
-      </button>
+        <span className="truncate">{item.title}</span>
+      </Button>
 
-      <div className="relative flex-shrink-0">
-        <button
-          ref={btnRef}
-          onClick={() => onToggleMenu(item.id)}
-          className="text-[#a11212] hover:opacity-70 text-[13px] font-bold px-1 leading-none transition"
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7 shrink-0 p-0 text-sm font-bold text-[#a11212] hover:bg-transparent hover:opacity-70"
+          >
+            ···
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent
+          align="end"
+          className="min-w-[85px] border border-[#c21f26] bg-white p-0 shadow-[0_2px_8px_rgba(0,0,0,0.15)]"
         >
-          ···
-        </button>
-
-        {/* Dropdown hapus*/}
-        {isActive && (
-          <HapusDropdown
-            itemId={item.id}
-            btnRef={btnRef}
-            onHapus={onHapus}
-            onClose={onCloseMenu}
-          />
-        )}
-      </div>
+          <DropdownMenuItem
+            className="cursor-pointer justify-start gap-1.5 px-2.5 py-2 text-xs font-semibold text-gray-900 focus:bg-red-50"
+            onSelect={() => onHapus(item.id)}
+          >
+            <Image src="/ikon-hapus.png" alt="" width={11} height={11} />
+            Hapus
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
     </div>
   )
 }
@@ -223,18 +120,11 @@ export default function FloatingMenu() {
   const [showDotMenu, setShowDotMenu] = useState(false)
   const [showRiwayat, setShowRiwayat] = useState(false)
   const [riwayatList, setRiwayatList] = useState<ChatHistory[]>([])
-  const [activeItemMenu, setActiveItemMenu] = useState<string | null>(null)
   const [copySuccess, setCopySuccess] = useState(false)
-
-  const [tooltipClose, setTooltipClose] = useState(false)
-  const [tooltipDot, setTooltipDot] = useState(false)
-  const [tooltipSalin, setTooltipSalin] = useState(false)
-  const [tooltipKirim, setTooltipKirim] = useState(false)
 
   const chatEndRef = useRef<HTMLDivElement>(null)
   const chatContainerRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
-  const dotMenuRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => { clearChatId(); setMessages([]) }, [])
 
@@ -268,21 +158,10 @@ export default function FloatingMenu() {
     return () => el.removeEventListener("scroll", fn)
   }, [messages])
 
-  // close dot menu
-  useEffect(() => {
-    const fn = (e: MouseEvent) => {
-      if (dotMenuRef.current && !dotMenuRef.current.contains(e.target as Node)) {
-        setShowDotMenu(false)
-      }
-    }
-    document.addEventListener("mousedown", fn)
-    return () => document.removeEventListener("mousedown", fn)
-  }, [])
-
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setInput(e.target.value)
     const el = textareaRef.current
-    if (el) { el.style.height = "auto"; el.style.height = Math.min(el.scrollHeight, 62) + "px" }
+    if (el) { el.style.height = "auto"; el.style.height = Math.min(el.scrollHeight, 96) + "px" }
   }
 
   const handleSend = async (customText?: string) => {
@@ -362,20 +241,17 @@ export default function FloatingMenu() {
 
   const handleChatBaru = () => { clearChatId(); setMessages([]); setShowDotMenu(false); setShowRiwayat(false) }
 
-  // Toggle riwayat
   const handleHapusRiwayat = (id: string) => {
-  setRiwayatList((prev) => {
-    const updated = prev.filter((item) => item.id !== id)
-    // Jika riwayat habis, otomatis tutup panel & reset chat
-    if (updated.length === 0) {
-      clearChatId()
-      setMessages([])
-      setShowRiwayat(false)
-    }
-    return updated
-  })
-  setActiveItemMenu(null)
-}
+    setRiwayatList((prev) => {
+      const updated = prev.filter((item) => item.id !== id)
+      if (updated.length === 0) {
+        clearChatId()
+        setMessages([])
+        setShowRiwayat(false)
+      }
+      return updated
+    })
+  }
 
   const handleLoadRiwayat = (id: string) => {
     saveChatId(id)
@@ -421,6 +297,10 @@ export default function FloatingMenu() {
     else { setShowDotMenu(false); setShowRiwayat(true) }
   }
 
+  const handleAutoScroll = () => {
+    chatEndRef.current?.scrollIntoView({ behavior: "smooth" })
+  }
+
   return (
     <>
       <style>{`
@@ -433,132 +313,186 @@ export default function FloatingMenu() {
         .dot-1 { animation: pulse-dot 1.2s infinite 0s; }
         .dot-2 { animation: pulse-dot 1.2s infinite 0.2s; }
         .dot-3 { animation: pulse-dot 1.2s infinite 0.4s; }
-        .dot-menu-item:hover { background-color: rgba(140,0,0,0.08); color: #8C0000; }
-        .bot-markdown p { margin: 0 0 6px 0; }
+        .dot-menu-item:hover, .dot-menu-item:focus, .dot-menu-item[data-highlighted] { background-color: rgba(140,0,0,0.08); color: #8C0000; }
+        .bot-markdown p { margin: 0 0 0.4em 0; }
         .bot-markdown ul, .bot-markdown ol { margin: 4px 0 6px 0; padding-left: 16px; }
         .bot-markdown li { margin: 2px 0; }
         .bot-markdown h1, .bot-markdown h2, .bot-markdown h3, .bot-markdown h4 { margin: 0 0 6px 0; font-size: inherit; }
-        .bot-markdown code { font-size: 10px; }
+        .bot-markdown code { font-size: 0.75rem; }
         .bot-markdown pre { margin: 6px 0; overflow-x: auto; }
         @keyframes slideInRiwayat {
           from { opacity: 0; transform: translateY(6px); }
           to   { opacity: 1; transform: translateY(0); }
         }
+        @media (min-width: 640px) {
+          .chat-widget-root .bot-markdown p { margin: 0 0 0.3em 0; }
+          .chat-widget-root .bot-markdown ul, .chat-widget-root .bot-markdown ol { margin: 2px 0 4px 0; }
+        }
       `}</style>
 
-      {/* Floating Button */}
-      <div className="fixed right-4 bottom-4 flex flex-col gap-3 z-50">
-        <div onClick={() => setOpenChat(!openChat)} className="w-10 h-10 rounded-full bg-[#a11212] flex items-center justify-center cursor-pointer shadow-md">
+      <div className="fixed right-4 bottom-4 z-50 flex flex-col gap-3 sm:gap-2 sm:right-3 sm:bottom-3">
+        <Button
+          type="button"
+          size="icon"
+          onClick={() => setOpenChat(!openChat)}
+          className="h-10 w-10 rounded-full border-0 bg-[#a11212] p-0 shadow-md hover:bg-[#8a0f0f] focus-visible:ring-[#a11212]/40"
+        >
           <Image src="/avatar-botnew.png" alt="chatbot" width={39} height={39} />
-        </div>
+        </Button>
         <Image src="/ikon-wanew.png" alt="wa" width={39} height={39} />
         <Image src="/ikon-idnew.png" alt="id" width={39} height={39} />
         <Image src="/ikon-orangnew.png" alt="user" width={39} height={39} />
       </div>
 
-      {/* Chat Window */}
       {openChat && (
-        <div className="fixed inset-0 z-50 sm:bg-transparent sm:block sm:pointer-events-none flex flex-col">
+        <div className="fixed inset-0 z-50 flex flex-col sm:pointer-events-none sm:block sm:bg-transparent">
 
-          {/* Header Mobile (OJK) */}
-          <div className="sm:hidden bg-white flex items-center justify-between px-6 py-3 relative w-full">
+          <div className="relative flex w-full items-center justify-between bg-white px-6 py-3 sm:hidden">
             <Image src="/ojk-logo.png" alt="ojk" width={120} height={38} />
-            <Image src="/ikon-hamburger.png" alt="menu" width={24} height={24} onClick={() => setOpenMenu(!openMenu)} className="cursor-pointer translate-y-1" />
+            <Image src="/ikon-hamburger.png" alt="menu" width={24} height={24} onClick={() => setOpenMenu(!openMenu)} className="translate-y-1 cursor-pointer" />
             {openMenu && (
-              <div className="absolute top-full left-0 w-full bg-white border-t border-gray-200 shadow-md z-50">
-                <ul className="flex flex-col text-[15px] font-bold text-gray-800 px-4 pt-2 pb-2">
+              <div className="absolute top-full left-0 z-50 w-full border-t border-gray-200 bg-white shadow-md">
+                <ul className="flex flex-col px-4 pt-2 pb-2 text-[14px] font-bold text-gray-800">
                   {["Tentang OJK","Fungsi Utama","Publikasi","Regulasi","Statistik","Layanan","Kasir"].map((item) => (
-                    <li key={item} className="cursor-pointer hover:text-red-700 py-3 border-b border-gray-100 last:border-0" onClick={() => setOpenMenu(false)}>{item}</li>
+                    <li key={item} className="cursor-pointer border-b border-gray-100 py-3 last:border-0 hover:text-red-700" onClick={() => setOpenMenu(false)}>{item}</li>
                   ))}
                 </ul>
 
-                {/* Search + ID */}
-                <div className="px-4 pb-4 pt-2 flex items-center gap-3 border-t border-gray-100">
-                  <div className="flex items-center bg-gray-100 rounded-full px-3 h-[34px] flex-1">
-                    <Image src="/ikon-cari2.png" alt="search" width={14} height={14} className="opacity-50" />
-                    <input type="text" className="bg-transparent outline-none ml-2 text-sm w-full" />
+                <div className="flex items-center gap-3 border-t border-gray-100 px-4 pt-2 pb-4">
+                  <div className="flex h-[38px] flex-1 items-center rounded-full bg-gray-100 px-3">
+                    <Image src="/ikon-cari2.png" alt="search" width={16} height={16} className="opacity-50" />
+                    <Input
+                      type="search"
+                      className="ml-2 h-9 min-h-0 flex-1 border-0 bg-transparent p-0 text-[15px] shadow-none focus-visible:ring-0"
+                    />
                   </div>
-                  <div className="w-8 h-8 rounded-full bg-black text-white flex items-center justify-center text-xs font-semibold flex-shrink-0">ID</div>
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-black text-xs font-semibold text-white">ID</div>
                 </div>
               </div>
             )}
           </div>
 
-          {/* Background merah */}
-          <div className="bg-[#850C12] h-[100dvh] flex flex-col items-center justify-start pt-6 pb-6 sm:bg-transparent sm:block overflow-hidden">
-            {/* card chat */}
+          <div className="flex h-[100dvh] flex-col items-center justify-start overflow-hidden bg-[#850C12] pt-6 pb-6 sm:block sm:bg-transparent">
             <div
                 style={{ border: "1.5px solid #a11212" }}
                 className="
+                  chat-widget-root
                   chat-responsive
+                  font-sans
                   bg-[#f3f3f3]
-                  shadow-[0_6px_18px_rgba(0,0,0,0.18)] 
-    
-                  w-[90vw] max-w-[380px]
-                  h-full max-h-none min-h-0 
-    
+                  shadow-[0_6px_18px_rgba(0,0,0,0.18)]
                   sm:fixed sm:right-18 sm:bottom-28
-                  sm:w-[270px] sm:max-w-none sm:min-w-0
-                  sm:h-[65vh] sm:max-h-none sm:min-h-0 
-    
-                  rounded-2xl flex flex-col
+                  p-3 sm:p-2
+                  flex flex-col
+                  rounded-2xl sm:rounded-xl
                   pointer-events-auto
-                  overflow-hidden 
-    
+                  overflow-hidden
                   sm:shadow-[0_0_16px_2px_rgba(161,18,18,0.2),0_6px_18px_rgba(0,0,0,0.18)]
                 "
             >
 
-              {/* Header Chat */}
               <div
-                className="bg-[#a11212] text-white px-3 py-1.5 flex items-center gap-2 font-semibold text-[13px] flex-shrink-0 relative"
-                style={{ margin: "16px 16px 0 16px", borderRadius: showRiwayat ? "6px 6px 0 0" : "6px" }}
+                className="relative flex w-full shrink-0 items-center gap-1.5 bg-[#a11212] py-2 pr-2 pl-2 text-[15px] font-semibold text-white sm:py-1.5"
+                style={{ borderRadius: showRiwayat ? "6px 6px 0 0" : "6px" }}
               >
-                <Image src="/ikon-chtbotnew.png" alt="bot" width={19} height={19} />
+                <Image src="/ikon-chtbotnew.png" alt="bot" width={16} height={16} className="shrink-0" />
                 <span className="flex-1">Sahabat Keuangan</span>
 
-                {/* Titik tiga */}
-                <div ref={dotMenuRef} className="relative">
-                  <div className="relative">
-                    {tooltipDot && !showDotMenu && !showRiwayat && <Tooltip label="Menu" anchor="right" dir="down" />}
-                    <button
-                      onClick={() => {
-                        if (showRiwayat) { setShowRiwayat(false); setTooltipDot(false) }
-                        else { setShowDotMenu(!showDotMenu); setTooltipDot(false) }
-                      }}
-                      onMouseEnter={() => setTooltipDot(true)}
-                      onMouseLeave={() => setTooltipDot(false)}
-                      className="text-white font-bold text-[16px] px-1 hover:opacity-80 transition leading-none"
-                    >⋮</button>
-                  </div>
-                  {showDotMenu && (
-                    <div className="absolute right-0 top-full mt-1 bg-white rounded-md shadow-lg z-50 overflow-hidden min-w-[130px]" style={{ border: "1px solid #e5e5e5" }}>
-                      <button onClick={handleChatBaru} className="dot-menu-item w-full text-left px-3 py-2 text-[11px] font-semibold text-gray-800 transition">Chat Baru</button>
-                      <div style={{ height: "1px", background: "#f0f0f0" }} />
-                      <button onClick={handleToggleRiwayat} className="dot-menu-item w-full text-left px-3 py-2 text-[11px] font-semibold text-gray-800 transition">Riwayat Chat</button>
-                    </div>
+                <DropdownMenu
+                  open={showDotMenu}
+                  onOpenChange={(open) => {
+                    if (open && showRiwayat) {
+                      setShowRiwayat(false)
+                      setShowDotMenu(false)
+                      return
+                    }
+                    setShowDotMenu(open)
+                  }}
+                >
+                  {showDotMenu || showRiwayat ? (
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        className="h-auto p-0 px-1 text-[16px] font-bold leading-none text-white hover:bg-transparent hover:opacity-80"
+                      >
+                        ⋮
+                      </Button>
+                    </DropdownMenuTrigger>
+                  ) : (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            className="h-auto p-0 px-1 text-[16px] font-bold leading-none text-white hover:bg-transparent hover:opacity-80"
+                          >
+                            ⋮
+                          </Button>
+                        </DropdownMenuTrigger>
+                      </TooltipTrigger>
+                      <TooltipContent
+                        side="bottom"
+                        align="end"
+                        sideOffset={6}
+                        className={chatTooltipContentClass}
+                      >
+                        Menu
+                      </TooltipContent>
+                    </Tooltip>
                   )}
-                </div>
+                  <DropdownMenuContent
+                    align="end"
+                    className="min-w-[130px] overflow-hidden rounded-md border border-[#e5e5e5] bg-white p-0 shadow-lg"
+                  >
+                    <DropdownMenuItem
+                      className="dot-menu-item cursor-pointer rounded-none px-3 py-2.5 text-xs font-semibold text-gray-800 sm:py-2"
+                      onSelect={() => { handleChatBaru() }}
+                    >
+                      Chat Baru
+                    </DropdownMenuItem>
+                    <div className="h-px w-full" style={{ background: "#f0f0f0" }} role="none" />
+                    <DropdownMenuItem
+                      className="dot-menu-item cursor-pointer rounded-none px-3 py-2.5 text-xs font-semibold text-gray-800 sm:py-2"
+                      onSelect={() => { handleToggleRiwayat() }}
+                    >
+                      Riwayat Chat
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
 
-                {/* Tombol close */}
                 <div className="relative">
-                  {tooltipClose && <Tooltip label="Tutup" anchor="right" dir="down" />}
-                  <Image
-                    src="/ikon-closenew.png" alt="close" width={10} height={10}
-                    onClick={() => { setOpenChat(false); setTooltipClose(false) }}
-                    onMouseEnter={() => setTooltipClose(true)}
-                    onMouseLeave={() => setTooltipClose(false)}
-                    className="cursor-pointer hover:opacity-80 transition"
-                  />
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        className="h-auto w-auto p-0 hover:bg-transparent"
+                        onClick={() => { setOpenChat(false) }}
+                      >
+                        <Image
+                          src="/ikon-closenew.png" alt="close" width={10} height={10}
+                          className="cursor-pointer opacity-100 transition hover:opacity-80"
+                        />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent
+                      side="bottom"
+                      align="end"
+                      sideOffset={6}
+                      className={chatTooltipContentClass}
+                    >
+                      Tutup
+                    </TooltipContent>
+                  </Tooltip>
                 </div>
               </div>
 
-              {/* Panel Riwayat */}
               {showRiwayat && (
                 <div
-                  className="flex-shrink-0 z-30"
+                  className="z-30 w-full shrink-0"
                   style={{
-                    margin: "0 16px",
                     marginTop: "-1px",
                     background: "white",
                     boxShadow: "0 4px 12px rgba(140,0,0,0.10)",
@@ -568,28 +502,23 @@ export default function FloatingMenu() {
                     animation: "slideInRiwayat 0.15s ease",
                   }}
                 >
-                  {/* Judul */}
                   <div
-                    className="text-center font-bold text-[11px] py-2"
+                    className="py-2.5 text-center text-xs font-bold sm:py-2"
                     style={{ color: "#8C0000", borderBottom: "1px solid #eee" }}
                   >
                     Riwayat Chat
                   </div>
 
-                  {/* List */}
                   <div className="flex flex-col pb-1">
                     {riwayatList.length === 0 ? (
-                      <p className="text-[10px] text-gray-400 text-center py-4">Belum ada riwayat chat.</p>
+                      <p className="py-4 text-center text-xs text-gray-400">Belum ada riwayat chat.</p>
                     ) : (
                       riwayatList.map((item) => (
                         <RiwayatItem
                           key={item.id}
                           item={item}
-                          isActive={activeItemMenu === item.id}
-                          onToggleMenu={(id) => setActiveItemMenu(activeItemMenu === id ? null : id)}
                           onHapus={handleHapusRiwayat}
                           onLoad={handleLoadRiwayat}
-                          onCloseMenu={() => setActiveItemMenu(null)}
                         />
                       ))
                     )}
@@ -597,46 +526,65 @@ export default function FloatingMenu() {
                 </div>
               )}
 
-              {/* Area chat + input */}
               <div
-                className="flex-1 flex flex-col min-h-0 px-4 pb-4 pt-2 transition-all duration-200"
+                className="flex min-h-0 flex-1 flex-col pt-1 sm:pt-0 transition-all duration-200"
                 style={{ filter: showRiwayat ? "blur(1.5px)" : "none" }}
               >
-                {/* Scrollable content */}
-                <div ref={chatContainerRef} className="chat-scroll flex-1 overflow-y-auto space-y-3 flex flex-col pr-1">
-                  {/* Greeting ROJAK */}
-                  <div className="flex items-center gap-1.5 text-[11px] font-semibold text-[#a11212] flex-shrink-0">
-                    <Image src="/ikon-chtbot2.png" alt="bot" width={16} height={16} className="rounded-full border border-[#a11212]" />
-                    Sahabat Keuangan
-                  </div>
-                  <div className="bg-[#f3f3f3] text-black border border-[#a11212] rounded-md p-1.5 max-w-[85%] text-[11px] leading-tight mx-auto font-semibold flex-shrink-0">
-                    Hai Sobat OJK! 👋 <br />
-                    Kamu sekarang sudah terhubung dengan layanan resmi Otoritas Jasa Keuangan.<br /><br />
-                    Kenalin, aku ROJAK (Robot Penjawab Kontak OJK) yang siap bantu kamu 😊<br /><br />
-                    Mau cari info apa hari ini? Pilih aja layanan di bawah atau ketik langsung ya 👇
+                <div ref={chatContainerRef} className="chat-scroll flex min-h-0 flex-1 flex-col space-y-2.5 sm:space-y-1.5 overflow-y-auto pr-1 pt-2 sm:pt-1">
+                  {/* <div className="flex w-full shrink-0 items-center gap-2 text-[12px] font-semibold text-[#a11212]">
+                    <Image src="/ikon-chtbot2.png" alt="bot" width={18} height={18} className="shrink-0 rounded-full border border-[#a11212]" />
+                    <span>Sahabat Keuangan</span>
+                  </div> */}
+                  <div
+                    className={cn(
+                      chatBotBubbleBaseClass,
+                      "w-full min-w-0 shrink-0 my-2"
+                    )}
+                  >
+                    <p className="m-0">
+                      Hai Sobat OJK! 👋
+                      <br />
+                      <br />
+                      Kenalin, aku ROJAK (Robot Penjawab Kontak OJK) yang siap bantu kamu 😊
+                      <br />
+                      <br />
+                      Mau cari info apa hari ini? Pilih aja layanan di bawah atau ketik langsung ya 👇
+                    </p>
                   </div>
                   
-                  {/* Menu (hanya tampil jika belum ada pesan) */}
                   {messages.length === 0 && (
-                    <div className="grid grid-cols-2 gap-1 mx-auto max-w-[85%] font-semibold flex-shrink-0">
+                    <div className="grid w-full shrink-0 grid-cols-2 items-stretch gap-1 sm:gap-1">
                       {QUICK_MENU.map((label, i) => (
-                        <button key={i} onClick={() => handleSend(label)} disabled={isLoading}
-                          className="bg-[#a11212] text-white text-[9px] px-1.5 py-[3px] rounded w-full hover:bg-[#8a0f0f] transition-colors disabled:opacity-50">
-                          {label}
-                        </button>
+                        <Button
+                          key={i}
+                          type="button"
+                          onClick={() => handleSend(label)}
+                          disabled={isLoading}
+                          className="inline-flex h-full min-h-[2.9rem] w-full min-w-0 shrink-1 items-center justify-center rounded border-0 bg-[#a11212] px-1.5 py-1.5 text-white whitespace-normal shadow-none hover:bg-[#8a0f0f] focus-visible:ring-[#a11212]/40 sm:min-h-[2.5rem] sm:px-1 sm:py-1"
+                        >
+                          <span className="line-clamp-2 w-full max-w-full text-center text-[10px] font-semibold leading-tight wrap-anywhere">
+                            {label}
+                          </span>
+                        </Button>
                       ))}
                     </div>
                   )}
 
-                  {/* Daftar pesan */}
-                  <div className="space-y-3 flex-1">
+                  <div className="w-full flex-1 space-y-2.5 sm:space-y-1.5">
                     {messages.map((msg, i) => (
-                      <div key={i} className="max-w-[85%] mx-auto flex flex-col">
-                        <div className={`inline-block p-1.5 rounded-md text-[11px] leading-tight font-semibold max-w-full break-words ${msg.sender === "user" ? "bg-[#a11212] text-white self-end border border-[#a11212]" : "bg-[#f3f3f3] text-black self-start border border-[#a11212]"}`}>
+                      <div
+                        key={i}
+                        className={`flex w-full ${msg.sender === "user" ? "justify-end" : "justify-start"}`}
+                      >
+                        <div
+                          className={
+                            msg.sender === "user" ? chatUserBubbleClass : chatBotBubbleClass
+                          }
+                        >
                           {msg.sender === "user" ? (
-                            <span className="break-words whitespace-pre-wrap">{msg.text}</span>
+                            <span className="wrap-break-word whitespace-pre-wrap">{msg.text}</span>
                           ) : (
-                            <Streamdown parseIncompleteMarkdown className="bot-markdown break-words">
+                            <Streamdown parseIncompleteMarkdown className="bot-markdown wrap-break-word">
                               {msg.text}
                             </Streamdown>
                           )}
@@ -644,23 +592,29 @@ export default function FloatingMenu() {
                       </div>
                     ))}
 
-                    {/* Loading indicator*/}
                     {isLoading && (
-                      <div className="max-w-[85%] mx-auto flex flex-col">
-                        <div className="bg-[#f3f3f3] border border-[#a11212] rounded-md p-2 self-start flex items-center gap-1">
-                          <span className="w-1.5 h-1.5 rounded-full bg-[#a11212] dot-1 inline-block" />
-                          <span className="w-1.5 h-1.5 rounded-full bg-[#a11212] dot-2 inline-block" />
-                          <span className="w-1.5 h-1.5 rounded-full bg-[#a11212] dot-3 inline-block" />
-                        </div>
+                      <div className="flex w-full items-start justify-start gap-1.5">
+                        {/* <Image
+                          src="/ikon-chtbot2.png"
+                          alt=""
+                          width={18}
+                          height={18}
+                          className="mt-0.5 shrink-0 rounded-full border border-[#a11212] opacity-90"
+                          aria-hidden
+                        /> */}
+                        {/* <div className={cn("flex min-h-9 sm:min-h-8 items-center gap-1.5", chatBotBubbleClass)}>
+                          <span className="inline-block h-1.5 w-1.5 rounded-full bg-[#a11212] dot-1" />
+                          <span className="inline-block h-1.5 w-1.5 rounded-full bg-[#a11212] dot-2" />
+                          <span className="inline-block h-1.5 w-1.5 rounded-full bg-[#a11212] dot-3" />
+                        </div> */}
                       </div>
                     )}
                     <div ref={chatEndRef} />
                   </div>
                 </div>
 
-                {/* Input + Kirim + Salin */}
-                <div className="mt-2 flex items-end gap-1 flex-shrink-0">
-                  <textarea
+                <div className="mt-2 flex shrink-0 items-end gap-1.5 pt-1 sm:mt-1.5 sm:gap-1 sm:pt-0.5">
+                  <Textarea
                     ref={textareaRef}
                     value={input}
                     onChange={handleInputChange}
@@ -673,55 +627,51 @@ export default function FloatingMenu() {
                     placeholder="Apa yang bisa saya bantu?..."
                     disabled={isLoading}
                     rows={1}
-                    className="flex-1 border border-[#a11212] rounded px-1.5 py-1 min-h-[26px] text-[10.5px] text-black bg-white placeholder-[#a11212]/50 outline-none disabled:opacity-60 resize-none overflow-hidden leading-tight"
+                    className="min-h-9 max-h-24 flex-1 resize-none overflow-hidden rounded border-[#a11212] bg-white px-2.5 py-2 text-[13px] leading-snug text-black shadow-none placeholder:text-[#a11212]/60 focus-visible:ring-[#a11212]/30 disabled:opacity-60 sm:min-h-8 sm:max-h-20 sm:px-2 sm:py-1.5 md:text-[13px]"
                   />
 
                   <div className="relative flex items-end gap-1">
                     {showScrollBtn && (
                       <Image src="/ikon-autoscroll.png" alt="auto scroll" width={30} height={30} quality={100}
                         onClick={handleAutoScroll}
-                        className="absolute bottom-full mb-0 right-0 translate-y-0.5 cursor-pointer hover:scale-110 transition-all duration-200 object-contain drop-shadow-md"
+                        className="absolute right-0 bottom-full mb-0 translate-y-0.5 cursor-pointer object-contain drop-shadow-md transition-all duration-200 hover:scale-110"
                       />
                     )}
 
-                    {/* Tombol kirim */}
-                    <div className="relative">
-                      {tooltipKirim && <Tooltip label="Kirim Pesan" anchor="left" />}
-                      <button
-                        onClick={() => handleSend()}
-                        disabled={isLoading}
-                        onMouseEnter={() => setTooltipKirim(true)}
-                        onMouseLeave={() => setTooltipKirim(false)}
-                        className="bg-[#a11212] text-white px-2 rounded text-[12px] font-semibold disabled:opacity-60 hover:bg-[#8a0f0f] transition-colors"
-                        style={{ height: "26px", display: "flex", alignItems: "center" }}
-                      >
-                        Kirim
-                      </button>
-                    </div>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          type="button"
+                          onClick={() => handleSend()}
+                          disabled={isLoading}
+                          className="h-9 min-w-0 shrink-0 rounded border-0 bg-[#a11212] px-3.5 text-[13px] font-semibold text-white shadow-none hover:bg-[#8a0f0f] focus-visible:ring-[#a11212]/40 sm:h-8 sm:px-3"
+                        >
+                          Kirim
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="top" align="start" sideOffset={6} className={chatTooltipContentClass}>
+                        Kirim Pesan
+                      </TooltipContent>
+                    </Tooltip>
 
-                    {/* Tombol salin */}
-                    <div className="relative">
-                      {tooltipSalin && <Tooltip label="Salin Ringkasan" anchor="right" />}
-                      <button
-                        onClick={handleCopy}
-                        onMouseEnter={() => setTooltipSalin(true)}
-                        onMouseLeave={() => setTooltipSalin(false)}
-                        style={{
-                          background: "#a11212",
-                          width: "26px", height: "26px",
-                          borderRadius: "4px",
-                          display: "flex", alignItems: "center", justifyContent: "center",
-                          flexShrink: 0,
-                        }}
-                        className="hover:opacity-80 transition"
-                      >
-                        {copySuccess ? (
-                          <span style={{ color: "white", fontSize: "10px", fontWeight: 700 }}>✓</span>
-                        ) : (
-                          <Image src="/ikon-salin.png" alt="salin" width={13} height={13} quality={100} />
-                        )}
-                      </button>
-                    </div>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          type="button"
+                          onClick={handleCopy}
+                          className="h-9 w-9 min-w-9 shrink-0 rounded border-0 bg-[#a11212] p-0 text-white shadow-none hover:opacity-80 focus-visible:ring-[#a11212]/40 sm:h-8 sm:w-8 sm:min-w-8"
+                        >
+                          {copySuccess ? (
+                            <span className="text-xs font-bold">✓</span>
+                          ) : (
+                            <Image src="/ikon-salin.png" alt="salin" width={15} height={15} quality={100} />
+                          )}
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="top" align="end" sideOffset={6} className={chatTooltipContentClass}>
+                        Salin Ringkasan
+                      </TooltipContent>
+                    </Tooltip>
                   </div>
                 </div>
               </div>
@@ -730,10 +680,7 @@ export default function FloatingMenu() {
           </div>
         </div>
       )}
+
     </>
   )
-
-  function handleAutoScroll() {
-    chatEndRef.current?.scrollIntoView({ behavior: "smooth" })
-  }
 }
