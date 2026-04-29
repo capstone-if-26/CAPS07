@@ -1,75 +1,193 @@
-import { generateRagAnswer } from '@/lib/ai/rag';
-import { createChatRecord, getChatById, updateChatSummary } from '@/modules/chats/repository';
-import { createMessageRecord, getLastMessagesByChatId } from '@/modules/messages/repository';
+import {
+  createAgenticRagStream,
+  generateConversationSummary,
+} from "@/lib/ai/rag";
+import {
+  createChatRecord,
+  getChatById,
+  updateChatSummary,
+} from "@/modules/chats/repository";
+import {
+  createMessageRecord,
+  getLastMessagesByChatId,
+  getMessagesByChatId,
+} from "@/modules/messages/repository";
+import { fetchAllAvailableDocuments } from "@/modules/documents/service";
+import {
+  classifyIntentAndRelevance,
+  generateIntentBasedSummary,
+  OjkIntent,
+} from "@/lib/ai/intent";
 
-const DEFAULT_MODEL_NAME = process.env.LLM_MODEL || "nvidia/nemotron-3-nano-30b-a3b:free";
+import type { Chats, ClientMessageSnapshot } from "./type";
+import {
+  persistIntentMetadata,
+  toChatLikeMessages,
+  formatConversationForSummary,
+  formatClientSnapshotForSummary,
+  clientSnapshotToChats,
+  mapKnowledgeDocuments,
+  buildDefaultNamespaces,
+} from "./utils";
 
-export async function processNewChat(userId: string | null, question: string, namespaceId: string) {
-  // 1. Create a new chat session
+export { normalizeClientMessageSnapshot } from "./utils";
+export type { ClientMessageSnapshot } from "./type";
+
+const DEFAULT_MODEL_NAME =
+  process.env.LLM_MODEL || "nvidia/nemotron-3-nano-30b-a3b:free";
+
+async function buildAgenticStreamSession({
+  chatId,
+  question,
+  longTermMemory,
+  shortTermMemory,
+}: {
+  chatId: string;
+  question: string;
+  longTermMemory: string;
+  shortTermMemory: Chats[] | [];
+}) {
+  const documents = await fetchAllAvailableDocuments();
+  const availableDocuments = mapKnowledgeDocuments(documents);
+  const defaultNamespaces = buildDefaultNamespaces(availableDocuments);
+
+  const streamResult = createAgenticRagStream({
+    question,
+    longTermMemory,
+    shortTermMemory,
+    availableDocuments,
+    defaultNamespaces,
+    onFinish: async ({ answer, matches }) => {
+      const finalAnswer =
+        answer || "Maaf, saya belum bisa memberikan jawaban saat ini.";
+
+      try {
+        const summary = await generateConversationSummary({
+          previousSummary: longTermMemory,
+          shortTermMemory,
+          question,
+          answer: finalAnswer,
+        });
+
+        await createMessageRecord({
+          senderType: "assistant",
+          content: finalAnswer,
+          chatId,
+          modelName: DEFAULT_MODEL_NAME,
+          metadata: JSON.stringify({ matches }),
+        });
+
+        await updateChatSummary(chatId, summary);
+      } catch (error) {
+        console.error("Failed to persist assistant response:", error);
+      }
+    },
+  });
+
+  return streamResult;
+}
+
+export async function startNewChatStream(
+  userId: string | null,
+  question: string,
+) {
   const chat = await createChatRecord({
     title: question.substring(0, 50),
     userId: userId,
   });
 
-  // Ambil memory (karena chat baru, memory kosong)
   const longTermMemory = "";
-  const shortTermMemory: any[] = [];
+  const shortTermMemory: Chats[] | [] = [];
 
-  // 2. Generate RAG Answer
-  const ragResponse = await generateRagAnswer(question, namespaceId, longTermMemory, shortTermMemory);
-
-  // 3. Save User Message
   await createMessageRecord({
-    senderType: 'user',
+    senderType: "user",
     content: question,
     chatId: chat.id,
   });
 
-  // 4. Save Assistant Message
-  const assistantMsg = await createMessageRecord({
-    senderType: 'assistant',
-    content: ragResponse.answer,
+  const streamResult = await buildAgenticStreamSession({
     chatId: chat.id,
-    modelName: DEFAULT_MODEL_NAME,
-    metadata: JSON.stringify({ matches: ragResponse.matches }),
+    question,
+    longTermMemory,
+    shortTermMemory,
   });
 
-  // 5. Update Chat Summary
-  await updateChatSummary(chat.id, ragResponse.summary);
-
-  return { chat, ragResponse, messageId: assistantMsg.id };
+  return { chatId: chat.id, streamResult };
 }
 
-export async function processExistingChat(chatId: string, question: string, namespaceId: string) {
-  // 1. Ensure chat exists
+export async function continueChatStream(chatId: string, question: string) {
   const chat = await getChatById(chatId);
-  if (!chat) throw new Error('Chat not found');
+  if (!chat) throw new Error("Chat not found");
 
-  // Ambil memory
   const longTermMemory = chat.summary || "";
   const shortTermMemory = await getLastMessagesByChatId(chatId, 10);
 
-  // 2. Generate RAG Answer
-  const ragResponse = await generateRagAnswer(question, namespaceId, longTermMemory, shortTermMemory);
-
-  // 3. Save User Message
   await createMessageRecord({
-    senderType: 'user',
+    senderType: "user",
     content: question,
     chatId: chat.id,
   });
 
-  // 4. Save Assistant Message
-  const assistantMsg = await createMessageRecord({
-    senderType: 'assistant',
-    content: ragResponse.answer,
+  const streamResult = await buildAgenticStreamSession({
     chatId: chat.id,
-    modelName: 'RAG Pipeline (OpenRouter)',
-    metadata: JSON.stringify({ matches: ragResponse.matches }),
+    question,
+    longTermMemory,
+    shortTermMemory,
   });
 
-  // 5. Update Chat Summary
-  await updateChatSummary(chat.id, ragResponse.summary);
+  return { chatId: chat.id, streamResult };
+}
 
-  return { ragResponse, messageId: assistantMsg.id };
+export async function generateChatIntentSummary(
+  chatId: string,
+  options?: { clientMessages?: ClientMessageSnapshot[] },
+) {
+  const chat = await getChatById(chatId);
+  if (!chat) throw new Error("Chat not found");
+
+  const dbMessages = await getMessagesByChatId(chatId);
+  const snapshot =
+    options?.clientMessages && options.clientMessages.length > 0
+      ? options.clientMessages
+      : undefined;
+
+  const conversation = snapshot
+    ? formatClientSnapshotForSummary(snapshot)
+    : formatConversationForSummary(dbMessages);
+
+  const intentContextChats = snapshot
+    ? clientSnapshotToChats(snapshot)
+    : toChatLikeMessages(dbMessages);
+
+  const chatLikeMessages = intentContextChats.slice(-20);
+  const lastUserQuestion = snapshot
+    ? [...snapshot]
+        .reverse()
+        .find((m) => m.role === "user")
+        ?.content?.trim() || ""
+    : [...dbMessages].reverse().find((msg) => msg.senderType === "user")
+        ?.content || "";
+  let intent: OjkIntent = "Lainnya";
+
+  const classificationText = conversation || lastUserQuestion;
+  if (classificationText) {
+    const classification = await classifyIntentAndRelevance(
+      classificationText,
+      chatLikeMessages,
+    );
+    intent = classification.intent;
+    await persistIntentMetadata(
+      chatId,
+      chat.metadata,
+      lastUserQuestion || classificationText,
+      classification,
+    );
+  }
+
+  const summary = await generateIntentBasedSummary(intent, conversation);
+  return {
+    chatId,
+    intent,
+    summary,
+  };
 }

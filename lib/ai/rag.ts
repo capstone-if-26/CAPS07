@@ -1,133 +1,326 @@
-import { generateText } from 'ai';
+import { generateText, stepCountIs, streamText, tool } from 'ai';
 import { model } from '@/lib/openrouter';
 import { retrieveRelevantChunks } from '@/lib/pinecone/utils';
-import { ScoredPineconeRecord, RecordMetadata } from '@pinecone-database/pinecone';
+import { stripSummaryMarkdownArtifacts } from '@/lib/format-plain-summary';
+import { z } from 'zod';
 
-/**
- * Menyusun potongan dokumen (chunks) menjadi sebuah string teks kohesif 
- * agar bisa disuntikkan ke dalam Context Window LLM.
- */
-export function formatRetrievedContext(
-  matches: ScoredPineconeRecord<RecordMetadata>[],
-  maxCharsPerChunk: number = 1800 // Membatasi ukuran konteks untuk mencegah Context Overflow
-): string {
-  return matches.map((m, index) => {
-    const md = m.metadata || {};
-    const score = (m.score || 0).toFixed(4);
+import type {
+  AgenticQuestion,
+  AgenticRagStreamParams,
+  RetrievedMatch,
+  SummaryParams,
+} from './type';
 
-    // Potong teks jika terlalu panjang
-    const text = String(md.text || '').substring(0, maxCharsPerChunk);
+import {
+  normalizeNamespaces,
+  dedupeMatches,
+  formatRetrievedContext,
+  buildReferenceAppendix,
+  buildDocsCatalog,
+  buildShortTermMemoryString,
+  shouldForceQuestionTool,
+  normalizeQuestionToolInput,
+  formatAgenticEvent,
+  getToolQuery,
+  getQuestionEvent,
+  getSourceEvents,
+} from './utils';
+import { getAgenticRagPrompt, getGenerateConversationSummaryPrompt } from './prompts';
 
-    const sourceBits: string[] = [];
+export type {
+  AgenticRagStreamEvent,
+  AgenticQuestionOption,
+  AgenticQuestion,
+  RetrievedMatch,
+  AgenticKnowledgeDocument,
+  AgenticRagFinishPayload,
+  AgenticRagStreamParams,
+} from './type';
 
-    // Mengekstrak metadata yang relevan berdasarkan skema Typescript kita
-    const keysToExtract = ["document_name", "section_path", "chunk_type", "effective_date"];
-    for (const key of keysToExtract) {
-      if (md[key]) {
-        sourceBits.push(`${key}=${md[key]}`);
-      }
-    }
+export { formatRetrievedContext } from './utils';
 
-    // Format output dengan referensi indeks [1], [2], dst untuk sitasi
-    return `[${index + 1}] score=${score}\nchunk_id=${m.id}\n${sourceBits.join(' | ')}\n${text}`;
-  }).join('\n\n');
-}
+export function createAgenticRagStream(params: AgenticRagStreamParams) {
+  const availableNamespaces = normalizeNamespaces(
+    params.availableDocuments.map((doc) => doc.namespace)
+  );
+  const fallbackNamespaces = normalizeNamespaces([
+    ...params.defaultNamespaces,
+    ...availableNamespaces,
+    process.env.PINECONE_NAMESPACE || 'pojk-22-2023-perlindungan-konsumen',
+  ]);
+  const namespaceSet = new Set(availableNamespaces);
+  const topK = params.topK ?? 6;
+  const shortTermMemoryStr = buildShortTermMemoryString(params.shortTermMemory);
+  const docsCatalog = buildDocsCatalog(params.availableDocuments);
+  const retrievedMatches: RetrievedMatch[] = [];
+  const askedQuestions: AgenticQuestion[] = [];
+  const citationIndexByChunkId = new Map<string, number>();
+  const citationMatchMap = new Map<number, RetrievedMatch>();
+  let nextCitationIndex = 1;
+  const forceQuestionTool = shouldForceQuestionTool(params.question);
 
-export interface RagResponse {
-  question: string;
-  answer: string;
-  summary: string;
-  matches: {
-    id: string;
-    score: number;
-    metadata: Record<string, any>;
-  }[];
-}
+  const { systemPrompt, userPrompt } = getAgenticRagPrompt(
+    params.longTermMemory,
+    shortTermMemoryStr,
+    docsCatalog,
+    params.question
+  );
 
-/**
- * End-to-End RAG Pipeline: Vector Retrieval + Context Formatting + LLM Generation
- */
-export async function generateRagAnswer(
-  question: string,
-  namespaceId: string,
-  longTermMemory: string,
-  shortTermMemory: any[],
-  topK: number = 6
-): Promise<RagResponse> {
+  return streamText({
+    model,
+    system: systemPrompt,
+    prompt: userPrompt,
+    temperature: 0.2,
+    topP: 0.9,
+    stopWhen: forceQuestionTool ? stepCountIs(1) : stepCountIs(4),
+    toolChoice: forceQuestionTool
+      ? { type: 'tool', toolName: 'ask_user_question' }
+      : 'auto',
+    tools: {
+      retrieve_policy_context: tool({
+        description:
+          'Retrieve policy/regulation chunks from vector database. Use this for OJK policy, compliance, legal, or document-grounded questions.',
+        inputSchema: z.object({
+          query: z.string().min(1),
+          namespaces: z.array(z.string()).optional(),
+          topK: z.number().int().min(1).max(12).optional(),
+        }),
+        execute: async ({ query, namespaces, topK: requestedTopK }) => {
+          const validNamespaces = (namespaces || []).filter((ns) => namespaceSet.has(ns));
+          const namespacesToUse = validNamespaces.length > 0 ? validNamespaces : fallbackNamespaces;
 
-  // 1. Ambil dokumen relevan dari Pinecone
-  const matches = await retrieveRelevantChunks(question, namespaceId, topK);
+          console.log('[AgenticRAG][ToolCall] retrieve_policy_context', {
+            query,
+            namespacesRequested: namespaces || [],
+            namespacesUsed: namespacesToUse,
+            topK: requestedTopK || topK,
+          });
 
-  // 2. Format menjadi konteks string
-  const contextText = formatRetrievedContext(matches);
+          const matches = await retrieveRelevantChunks(
+            query,
+            namespacesToUse,
+            requestedTopK || topK
+          );
 
-  // Format short term memory string
-  const shortTermMemoryStr = shortTermMemory.map(m => `${m.senderType}: ${m.content}`).join('\n');
+          const serializedMatches: RetrievedMatch[] = matches.map((match) => ({
+            id: match.id,
+            score: match.score || 0,
+            metadata: (match.metadata || {}) as Record<string, unknown>,
+          }));
 
-  // 3. Konfigurasi System Prompt
-  const systemPrompt = `You are an internal company policy assistant for Otoritas Jasa Keuangan (OJK).
+          const sourcesWithCitation = serializedMatches.map((match) => {
+            let citationNumber = citationIndexByChunkId.get(match.id);
 
-Rules:
-- Use STRICTLY the provided context.
-- If the context does not contain the answer, reply exacty: "Saya tidak dapat menemukan informasi tersebut dalam dokumen kebijakan yang tersedia."
-- Do not hallucinate, guess, or inject external knowledge.
-- Cite chunk numbers like [1] when referencing specific rules.
-- Maintain a formal, authoritative, and practical tone in Indonesian.
+            if (!citationNumber) {
+              citationNumber = nextCitationIndex;
+              nextCitationIndex++;
+              citationIndexByChunkId.set(match.id, citationNumber);
+              citationMatchMap.set(citationNumber, match);
+            }
 
-Always respond in STRICT JSON.
-Do not include markdown, explanation, or extra text.
-Only output valid JSON.
-Format WAJIB:
-{
-  "answer": "<jawaban utama ke user>",
-  "summary": "<ringkasan kumulatif percakapan terbaru>"
-}
-`;
+            const textPreview = String(match.metadata.text || '')
+              .replace(/\s+/g, ' ')
+              .trim()
+              .slice(0, 400);
 
-  // 4. Injeksi Kueri dan Konteks ke User Prompt
-  const userPrompt = `Long-term memory (summary):\n${longTermMemory || 'Belum ada percakapan sebelumnya.'}\n\nShort-term memory (last messages):\n${shortTermMemoryStr || 'Belum ada pesan terbaru.'}\n\nCurrent Question:\n${question}\n\nContext:\n${contextText}\n\nInstruction: Output strictly JSON with answer and summary fields.`;
+            return {
+              citationNumber,
+              citation: `[${citationNumber}]`,
+              chunkId: match.id,
+              score: Number(match.score.toFixed(4)),
+              documentName: String(match.metadata.document_name || ''),
+              sectionPath: String(match.metadata.section_path || ''),
+              chunkType: String(match.metadata.chunk_type || ''),
+              chunkIndex: match.metadata.chunk_index,
+              textPreview,
+            };
+          });
 
-  // 5. Eksekusi LLM via Vercel AI SDK dengan Retry (Maks 2x Retry)
-  let attempt = 0;
-  const maxRetries = 2; 
-  let parsedResult = { answer: '', summary: '' };
-  
-  while (attempt <= maxRetries) {
-    try {
-      const { text } = await generateText({
-        model: model,
-        system: systemPrompt,
-        prompt: userPrompt,
-        temperature: 0.1,
-        topP: 0.9,
-        topK: 5,
+          retrievedMatches.push(...serializedMatches);
+
+          return {
+            namespacesUsed: namespacesToUse,
+            context: formatRetrievedContext(matches, 1800, citationIndexByChunkId),
+            sources: sourcesWithCitation,
+          };
+        },
+      }),
+      ask_user_question: tool({
+        description:
+          'Ask the user a follow-up question with radio options. ALWAYS use this tool instead of normal text for clarification questions that include selectable answers/options.',
+        inputSchema: z.object({
+          question: z.string().min(1).max(220),
+          options: z.array(z.string().min(1).max(80)).min(1).max(4),
+          customOptionLabel: z.string().min(1).max(80).optional(),
+        }),
+        execute: async (input) => {
+          const question = normalizeQuestionToolInput(input);
+          if (question) {
+            askedQuestions.push(question);
+          }
+
+          return {
+            status: 'question_sent',
+            instruction: 'Wait for the user to answer this question before continuing.',
+            question,
+          };
+        },
+      }),
+    },
+    onStepFinish: (step) => {
+      console.log('[AgenticRAG][Step]', {
+        stepNumber: step.stepNumber,
+        finishReason: step.finishReason,
+        reasoning: step.reasoningText || null,
+        toolCalls: step.toolCalls.map((toolCall) => ({
+          toolName: toolCall.toolName,
+          input: toolCall.input,
+        })),
+        toolResults: step.toolResults.map((toolResult) => ({
+          toolName: toolResult.toolName,
+          outputSummary:
+            typeof toolResult.output === 'object' && toolResult.output !== null
+              ? {
+                  namespacesUsed: (toolResult.output as { namespacesUsed?: string[] }).namespacesUsed,
+                  sourceCount: Array.isArray((toolResult.output as { sources?: unknown[] }).sources)
+                    ? (toolResult.output as { sources?: unknown[] }).sources?.length
+                    : 0,
+                }
+              : toolResult.output,
+        })),
       });
-      // bersihkan text dari kemungkinan markdown code block
-      const cleanText = text.replace(/```json/g, '').replace(/```/g, '').trim();
-      parsedResult = JSON.parse(cleanText);
-      
-      if (!parsedResult.answer || typeof parsedResult.summary !== 'string') {
-        throw new Error('Invalid JSON format keys: answer and summary are missing');
-      }
-      break; 
-    } catch (err) {
-      attempt++;
-      if (attempt > maxRetries) {
-        throw new Error(`LLM Error / Failed to parse JSON after 3 attempts. Last error: ${err}`);
-      }
-      // wait a bit before retry just in case
-      await new Promise(res => setTimeout(res, 1000));
-    }
-  }
+    },
+    onFinish: async ({ text }) => {
+      const trimmedText = text.trim();
+      const latestQuestion = askedQuestions.at(-1);
+      const answerText = latestQuestion
+        ? `Pertanyaan lanjutan: ${latestQuestion.question}`
+        : trimmedText;
+      const answerWithReferences = buildReferenceAppendix(answerText, citationMatchMap);
 
-  return {
-    question,
-    answer: parsedResult.answer,
-    summary: parsedResult.summary,
-    matches: matches.map(m => ({
-      id: m.id,
-      score: m.score || 0,
-      metadata: m.metadata || {}
-    }))
-  };
+      await params.onFinish?.({
+        answer: answerWithReferences,
+        matches: dedupeMatches(retrievedMatches),
+      });
+    },
+  });
+}
+
+export function toAgenticEventStreamResponse(
+  streamResult: ReturnType<typeof createAgenticRagStream>,
+  headers: HeadersInit
+) {
+  const eventStream = streamResult.fullStream.pipeThrough(
+    new TransformStream({
+      transform(chunk, controller) {
+        switch (chunk.type) {
+          case 'start':
+            controller.enqueue(formatAgenticEvent({
+              type: 'task',
+              status: 'running',
+              title: 'Sedang berpikir',
+            }));
+            break;
+
+          case 'tool-call': {
+            if (chunk.toolName === 'ask_user_question') {
+              controller.enqueue(formatAgenticEvent({
+                type: 'task',
+                status: 'running',
+                title: 'Menyiapkan pertanyaan',
+              }));
+              const questionEvent = getQuestionEvent(chunk.input);
+              if (questionEvent) {
+                controller.enqueue(formatAgenticEvent(questionEvent));
+              }
+              break;
+            }
+
+            const query = getToolQuery(chunk.input);
+            controller.enqueue(formatAgenticEvent({
+              type: 'task',
+              status: 'running',
+              title: 'Mencari dokumen',
+              detail: query ? `"${query}"` : undefined,
+            }));
+            break;
+          }
+
+          case 'tool-result':
+            if (chunk.toolName === 'ask_user_question') {
+              break;
+            }
+
+            controller.enqueue(formatAgenticEvent({
+              type: 'task',
+              status: 'done',
+              title: 'Membaca dokumen',
+            }));
+            for (const event of getSourceEvents(chunk.output)) {
+              controller.enqueue(formatAgenticEvent(event));
+            }
+            break;
+
+          case 'text-start':
+            controller.enqueue(formatAgenticEvent({
+              type: 'task',
+              status: 'running',
+              title: 'Membuat jawaban',
+            }));
+            break;
+
+          case 'text-delta':
+            controller.enqueue(formatAgenticEvent({
+              type: 'text',
+              text: chunk.text,
+            }));
+            break;
+
+          case 'tool-error':
+          case 'error':
+            controller.enqueue(formatAgenticEvent({
+              type: 'task',
+              status: 'error',
+              title: 'Terjadi kendala saat memproses',
+            }));
+            break;
+        }
+      },
+    })
+  );
+
+  return new Response(eventStream, {
+    status: 200,
+    headers: {
+      ...headers,
+      'Content-Type': 'text/event-stream; charset=utf-8',
+      'Cache-Control': 'no-cache, no-transform',
+    },
+  });
+}
+
+export async function generateConversationSummary(params: SummaryParams): Promise<string> {
+  const shortTermMemoryStr = buildShortTermMemoryString(params.shortTermMemory);
+
+  const { systemPrompt, userPrompt } = getGenerateConversationSummaryPrompt(
+    params.previousSummary,
+    shortTermMemoryStr,
+    params.question,
+    params.answer
+  );
+
+  try {
+    const { text } = await generateText({
+      model,
+      system: systemPrompt,
+      prompt: userPrompt,
+      temperature: 0.1,
+      topP: 0.9,
+    });
+
+    const summary = stripSummaryMarkdownArtifacts(text.trim());
+    return summary || params.previousSummary || '';
+  } catch {
+    return params.previousSummary || '';
+  }
 }
