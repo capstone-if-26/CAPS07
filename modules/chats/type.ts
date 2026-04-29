@@ -1,3 +1,5 @@
+import { OjkIntent } from "@/lib/ai/intent";
+
 export type Chats = {
     id: string;
     senderType: string | null;
@@ -13,3 +15,24 @@ export type Chats = {
     deletedAt: Date | null;
     chatId: string;
 }
+
+export type ChatMetadataShape = {
+  intent?: OjkIntent;
+  isOjkRelevant?: boolean;
+  intentConfidence?: number;
+  intentReason?: string;
+  intentUpdatedAt?: string;
+  intentHistory?: Array<{
+    intent: OjkIntent;
+    isOjkRelevant: boolean;
+    confidence: number;
+    at: string;
+    questionPreview: string;
+  }>;
+};
+
+/** Mirrors client/UI messages for summarization (may include turns not persisted yet). */
+export type ClientMessageSnapshot = {
+  role: "user" | "assistant";
+  content: string;
+};

@@ -1,6 +1,7 @@
 import { generateText } from "ai";
 import { routingModel } from "@/lib/openrouter";
 import { getRoutingPrompt } from "./prompts";
+import { Chats } from "@/modules/chats/type";
 
 export interface DocumentInfo {
   name: string;
@@ -14,15 +15,13 @@ export interface RoutingResult {
   reason: string;
   needs_namespace_routing: boolean;
   namespaces?: string[];
-  rewritten_query: string;
-  sub_intent?: string | null;
 }
 
 export async function routeIntentAndNamespaces(
   query: string,
   documents: DocumentInfo[],
+  shortTermMemory: Chats[] = [],
   longTermMemory: string = "",
-  shortTermMemory: any[] = [],
 ): Promise<RoutingResult> {
   if (!documents || documents.length === 0) {
     return {
@@ -30,7 +29,6 @@ export async function routeIntentAndNamespaces(
       confidence: 1.0,
       reason: "No documents available",
       needs_namespace_routing: false,
-      rewritten_query: query,
     };
   }
 
@@ -57,10 +55,8 @@ export async function routeIntentAndNamespaces(
         model: routingModel,
         system: systemPrompt,
         prompt: userPrompt,
-        temperature: 0,
-        topP: 1,
-        topK: 2,
-        seed: 42,
+        temperature: 0.1,
+        topP: 0.9,
       });
 
       const cleanText = text
@@ -77,7 +73,6 @@ export async function routeIntentAndNamespaces(
           confidence: 0.0,
           reason: "Invalid intent from model",
           needs_namespace_routing: false,
-          rewritten_query: query,
         };
       }
 
@@ -104,7 +99,6 @@ export async function routeIntentAndNamespaces(
           confidence: 0.0,
           reason: "Fallback due to routing error",
           needs_namespace_routing: false,
-          rewritten_query: query,
         };
       }
 
@@ -117,6 +111,5 @@ export async function routeIntentAndNamespaces(
     confidence: 0.0,
     reason: "Unexpected fallback",
     needs_namespace_routing: false,
-    rewritten_query: query,
   };
 }

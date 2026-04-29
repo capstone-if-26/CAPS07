@@ -1,7 +1,8 @@
 import { getMessageById } from '@/modules/messages/repository';
-import { processExistingChat } from '@/modules/chats/service';
+import { continueChatStream } from '@/modules/chats/service';
 import { NextRequest } from 'next/server';
 import { buildSuccessResponse, buildFailedResponse } from '@/lib/utils/response';
+import { toAgenticEventStreamResponse } from '@/lib/ai/rag';
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -40,13 +41,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     }
 
     console.log(`Melanjutkan chat ${chatId} untuk: ${question}`);
-    const result = await processExistingChat(chatId, question);
+    const result = await continueChatStream(chatId, question);
 
-    return buildSuccessResponse({
-      chatId,
-      answer: result.ragResponse.answer,
-      matches: result.ragResponse.matches
-    }, "Pesan berhasil diproses", 200);
+    return toAgenticEventStreamResponse(result.streamResult, {
+      'x-chat-id': result.chatId,
+    });
 
   } catch (error: unknown) {
     let message = 'Terjadi kesalahan internal';

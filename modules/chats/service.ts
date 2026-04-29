@@ -1,4 +1,7 @@
-import { generateRagAnswer, generateDirectAnswer } from "@/lib/ai/rag";
+import {
+  createAgenticRagStream,
+  generateConversationSummary,
+} from "@/lib/ai/rag";
 import {
   createChatRecord,
   getChatById,
@@ -7,157 +10,184 @@ import {
 import {
   createMessageRecord,
   getLastMessagesByChatId,
+  getMessagesByChatId,
 } from "@/modules/messages/repository";
 import { fetchAllAvailableDocuments } from "@/modules/documents/service";
-import { routeIntentAndNamespaces } from "@/lib/ai/routing";
-import { Chats } from "./type";
+import {
+  classifyIntentAndRelevance,
+  generateIntentBasedSummary,
+  OjkIntent,
+} from "@/lib/ai/intent";
+
+import type { Chats, ClientMessageSnapshot } from "./type";
+import {
+  persistIntentMetadata,
+  toChatLikeMessages,
+  formatConversationForSummary,
+  formatClientSnapshotForSummary,
+  clientSnapshotToChats,
+  mapKnowledgeDocuments,
+  buildDefaultNamespaces,
+} from "./utils";
+
+export { normalizeClientMessageSnapshot } from "./utils";
+export type { ClientMessageSnapshot } from "./type";
 
 const DEFAULT_MODEL_NAME =
   process.env.LLM_MODEL || "nvidia/nemotron-3-nano-30b-a3b:free";
 
-export async function processNewChat(userId: string | null, question: string) {
-  // 1. Create a new chat session
+async function buildAgenticStreamSession({
+  chatId,
+  question,
+  longTermMemory,
+  shortTermMemory,
+}: {
+  chatId: string;
+  question: string;
+  longTermMemory: string;
+  shortTermMemory: Chats[] | [];
+}) {
+  const documents = await fetchAllAvailableDocuments();
+  const availableDocuments = mapKnowledgeDocuments(documents);
+  const defaultNamespaces = buildDefaultNamespaces(availableDocuments);
+
+  const streamResult = createAgenticRagStream({
+    question,
+    longTermMemory,
+    shortTermMemory,
+    availableDocuments,
+    defaultNamespaces,
+    onFinish: async ({ answer, matches }) => {
+      const finalAnswer =
+        answer || "Maaf, saya belum bisa memberikan jawaban saat ini.";
+
+      try {
+        const summary = await generateConversationSummary({
+          previousSummary: longTermMemory,
+          shortTermMemory,
+          question,
+          answer: finalAnswer,
+        });
+
+        await createMessageRecord({
+          senderType: "assistant",
+          content: finalAnswer,
+          chatId,
+          modelName: DEFAULT_MODEL_NAME,
+          metadata: JSON.stringify({ matches }),
+        });
+
+        await updateChatSummary(chatId, summary);
+      } catch (error) {
+        console.error("Failed to persist assistant response:", error);
+      }
+    },
+  });
+
+  return streamResult;
+}
+
+export async function startNewChatStream(
+  userId: string | null,
+  question: string,
+) {
   const chat = await createChatRecord({
     title: question.substring(0, 50),
     userId: userId,
   });
 
-  // Ambil memory (karena chat baru, memory kosong)
   const longTermMemory = "";
   const shortTermMemory: Chats[] | [] = [];
 
-  // Routing Namespaces & Intent
-  const documents = await fetchAllAvailableDocuments();
-  const routing = await routeIntentAndNamespaces(
-    question,
-    documents,
-    longTermMemory,
-    shortTermMemory,
-  );
-  console.log(
-    `LLM Routing intent: ${routing.intent}, reason: ${routing.reason}`,
-  );
-  console.log(`LLM Routing rewritten query: ${routing.rewritten_query}`);
-  console.log(`LLM Routing confidence: ${routing.confidence}`);
-  console.log(`Sub-intent: ${routing.sub_intent}`);
-
-  let ragResponse;
-  if (routing.intent === "business") {
-    let namespaces = routing.namespaces;
-    if (!namespaces || namespaces.length === 0) {
-      namespaces = [
-        process.env.PINECONE_NAMESPACE || "pojk-22-2023-perlindungan-konsumen",
-      ];
-      console.warn(
-        "Fallback to default namespace because LLM routing gave empty array.",
-      );
-    } else {
-      console.log(`LLM Routing selected namespaces: ${namespaces.join(", ")}`);
-    }
-    ragResponse = await generateRagAnswer(
-      routing.rewritten_query,
-      namespaces,
-      longTermMemory,
-      shortTermMemory,
-    );
-  } else {
-    ragResponse = await generateDirectAnswer(
-      routing.rewritten_query,
-      longTermMemory,
-      shortTermMemory,
-    );
-  }
-
-  // 3. Save User Message
   await createMessageRecord({
     senderType: "user",
     content: question,
     chatId: chat.id,
   });
 
-  // 4. Save Assistant Message
-  const assistantMsg = await createMessageRecord({
-    senderType: "assistant",
-    content: ragResponse.answer,
+  const streamResult = await buildAgenticStreamSession({
     chatId: chat.id,
-    modelName: DEFAULT_MODEL_NAME,
-    metadata: JSON.stringify({ matches: ragResponse.matches }),
+    question,
+    longTermMemory,
+    shortTermMemory,
   });
 
-  // 5. Update Chat Summary
-  await updateChatSummary(chat.id, ragResponse.summary);
-
-  return { chat, ragResponse, messageId: assistantMsg.id };
+  return { chatId: chat.id, streamResult };
 }
 
-export async function processExistingChat(chatId: string, question: string) {
-  // 1. Ensure chat exists
+export async function continueChatStream(chatId: string, question: string) {
   const chat = await getChatById(chatId);
   if (!chat) throw new Error("Chat not found");
 
-  // Ambil memory
   const longTermMemory = chat.summary || "";
   const shortTermMemory = await getLastMessagesByChatId(chatId, 10);
 
-  // Routing Namespaces & Intent
-  const documents = await fetchAllAvailableDocuments();
-  const routing = await routeIntentAndNamespaces(
-    question,
-    documents,
-    longTermMemory,
-    shortTermMemory,
-  );
-  console.log(
-    `LLM Routing intent: ${routing.intent}, reason: ${routing.reason}`,
-  );
-  console.log(`LLM Routing rewritten query: ${routing.rewritten_query}`);
-  console.log(`LLM Routing confidence: ${routing.confidence}`);
-  console.log(`Sub-intent: ${routing.sub_intent}`);
-  let ragResponse;
-  if (routing.intent === "business") {
-    let namespaces = routing.namespaces;
-    if (!namespaces || namespaces.length === 0) {
-      namespaces = [
-        process.env.PINECONE_NAMESPACE || "pojk-22-2023-perlindungan-konsumen",
-      ];
-      console.warn(
-        "Fallback to default namespace because LLM routing gave empty array.",
-      );
-    } else {
-      console.log(`LLM Routing selected namespaces: ${namespaces.join(", ")}`);
-    }
-    ragResponse = await generateRagAnswer(
-      routing.rewritten_query,
-      namespaces,
-      longTermMemory,
-      shortTermMemory,
-    );
-  } else {
-    ragResponse = await generateDirectAnswer(
-      routing.rewritten_query,
-      longTermMemory,
-      shortTermMemory,
-    );
-  }
-
-  // 3. Save User Message
   await createMessageRecord({
     senderType: "user",
     content: question,
     chatId: chat.id,
   });
 
-  // 4. Save Assistant Message
-  const assistantMsg = await createMessageRecord({
-    senderType: "assistant",
-    content: ragResponse.answer,
+  const streamResult = await buildAgenticStreamSession({
     chatId: chat.id,
-    modelName: "RAG Pipeline (OpenRouter)",
-    metadata: JSON.stringify({ matches: ragResponse.matches }),
+    question,
+    longTermMemory,
+    shortTermMemory,
   });
 
-  // 5. Update Chat Summary
-  await updateChatSummary(chat.id, ragResponse.summary);
+  return { chatId: chat.id, streamResult };
+}
 
-  return { ragResponse, messageId: assistantMsg.id };
+export async function generateChatIntentSummary(
+  chatId: string,
+  options?: { clientMessages?: ClientMessageSnapshot[] },
+) {
+  const chat = await getChatById(chatId);
+  if (!chat) throw new Error("Chat not found");
+
+  const dbMessages = await getMessagesByChatId(chatId);
+  const snapshot =
+    options?.clientMessages && options.clientMessages.length > 0
+      ? options.clientMessages
+      : undefined;
+
+  const conversation = snapshot
+    ? formatClientSnapshotForSummary(snapshot)
+    : formatConversationForSummary(dbMessages);
+
+  const intentContextChats = snapshot
+    ? clientSnapshotToChats(snapshot)
+    : toChatLikeMessages(dbMessages);
+
+  const chatLikeMessages = intentContextChats.slice(-20);
+  const lastUserQuestion = snapshot
+    ? [...snapshot]
+        .reverse()
+        .find((m) => m.role === "user")
+        ?.content?.trim() || ""
+    : [...dbMessages].reverse().find((msg) => msg.senderType === "user")
+        ?.content || "";
+  let intent: OjkIntent = "Lainnya";
+
+  const classificationText = conversation || lastUserQuestion;
+  if (classificationText) {
+    const classification = await classifyIntentAndRelevance(
+      classificationText,
+      chatLikeMessages,
+    );
+    intent = classification.intent;
+    await persistIntentMetadata(
+      chatId,
+      chat.metadata,
+      lastUserQuestion || classificationText,
+      classification,
+    );
+  }
+
+  const summary = await generateIntentBasedSummary(intent, conversation);
+  return {
+    chatId,
+    intent,
+    summary,
+  };
 }

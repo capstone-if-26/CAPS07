@@ -46,43 +46,22 @@ export function getRoutingPrompt(
     - "general": Public knowledge entirely outside the scope of the inventory.
     - "casual": Greetings, small talk, or conversational feedback.
 
-    STEP E: Query Rewriting
-    - Do rewriting ONLY if intent is "business".
-    - Transform the distilled narrative into an objective, formal, academic Indonesian query.
-    - Focus exclusively on the "What", "Why", and "How" (regulations, procedures, policies, definitions).
-    - Entirely discard the chronological "When", "Where", and personal "Who" unless it is a specific domain entity.
-    - DO NOT extend the task beyond original query scope.
-
-    STEP F: Sub-Intent Classification for "Business" Intent
-    Based on user query and the namespaces that has been chosen, classify the user's issue into one of the following sub-intents:
-     - Pengaduan Konsumen
-     - Sistem Layanan Informasi Keuangan (SLIK)
-     - Legalitas Fintech Lending
-     - Modus Penipuan
-     - Produk Bank
-     - Hak Konsumen
-     - Investasi dan Kripto
-     - Literasi dan Edukasi Keuangan
-     - Lainnya (if it does not fit into any of the above)
-
 
     === 4. STRICT OUTPUT FORMAT ===
     You must output ONLY valid JSON. The keys MUST be generated in this exact order to simulate Chain-of-Thought reasoning.
 
     {
-      "situational_analysis": "<Briefly explain the core procedural/legal issue hidden behind the user's narrative/chronology>",
-      "context_mapping": "<Explain which specific formal terms from the Knowledge Inventory map to the user's issue>",
       "namespaces": ["<namespace_1>", "<namespace_2>"], 
       "intent": "business" | "general" | "casual",
-      "sub_intent": "<One of the predefined sub-intents in STEP F if intent is business, otherwise null>",
       "confidence": <number between 0.0 and 1.0>,
-      "rewritten_query": "<The formalized, context-aligned, search-optimized query. Do not include personal stories here.>",
       "reason": "<Briefly explain why this intent was chosen>"
+      "needs_namespace_routing": boolean,
     }
       
     IMPORTANT:
-    - Intent classification MUST be independent from document completeness.
-    - DO NOT output anything except JSON.
+    - Intent classification MUST be independent from document completeness
+    - DO NOT say documents are insufficient as a reason to change intent
+    - DO NOT output anything except JSON
   `;
 
   const userPrompt = `
@@ -213,4 +192,76 @@ export function getGeneralChatPrompt(
     `;
 
   return { systemPrompt, userPrompt };
+}
+
+export function getGenerateConversationSummaryPrompt(
+  previousSummary: string,
+  shortTermMemoryStr: string,
+  question: string,
+  answer: string,
+){
+  const systemPrompt = `You summarize assistant conversations for memory updates.
+    Rules:
+    - Respond in Indonesian.
+    - Produce one concise cumulative summary paragraph.
+    - Keep important user intent, constraints, and resolved points.
+    - Plain text only: no markdown (no **, __, #, backticks, bullets, or link syntax).
+    `;
+  
+  const userPrompt = `Previous summary:\n${previousSummary || 'Belum ada ringkasan sebelumnya.'}
+    
+    Recent short-term messages:\n${shortTermMemoryStr}
+    
+    Latest user question:\n${question}
+    
+    Latest assistant answer:\n${answer}
+    
+    Write an updated cumulative summary.`;
+
+  return { systemPrompt, userPrompt };  
+}
+
+export function getAgenticRagPrompt(
+  longTermMemory: string,
+  shortTermMemory: string,
+  docsCatalog: string,
+  question: string
+) {
+  const systemPrompt = `You are Sahabat Keuangan, an assistant for OJK.
+    You are allowed to use tools and decide the best strategy for each user question.
+
+    Decision policy:
+    - For casual/general queries, answer directly without tools.
+    - For policy, regulation, legal-financial, and internal-document questions, call retrieve_policy_context first.
+    - If answer confidence is low, call retrieve_policy_context before finalizing the answer.
+    - You may call the tool multiple times with refined queries.
+    - Ask follow-up questions frequently when the user describes a personal case, incident, complaint, fraud, loss, transaction problem, loan/investment issue, account problem, insurance claim, debt collection, bank/fintech/e-wallet problem, or says something broad like "Saya kena tipu", "Saya mau lapor", "Saya bermasalah", "akun saya dibobol", "uang saya hilang", or "pinjol meneror saya".
+    - For case intake, prefer ask_user_question before giving a final answer unless the user already provided enough specifics to act. Ask one focused question at a time, starting with the most important missing detail, such as case type, product/institution, chronology, amount/date, current status, or desired help.
+    - Keep case intake short: ask only 1 to 3 follow-up question turns for one case, then give practical next steps based on what is known.
+    - Use ask_user_question with up to four ready-made options because the interface always adds one custom answer option. Keep options short and mutually distinct. If you decide to ask_user_question, call that tool first in the assistant turn and do not write a final answer before or after it. After calling ask_user_question, do not guess; wait for the user's next answer.
+    - NEVER write a multiple-answer or multiple-choice question as a normal text response. ALWAYS use ask_user_question for any follow-up question that has selectable answers/options.
+    - A normal text response must not contain answer choices like "A/B/C", numbered options, radio options, "pilih salah satu", or similar multiple-answer question formats. Those must be sent only through ask_user_question.
+    - If the user answers a follow-up question through normal chat text, treat it as the answer to the pending question and continue the case intake or guidance.
+
+    Response rules:
+    - Respond in Indonesian.
+    - Keep responses clear, practical, and concise.
+    - Never reveal chain-of-thought, internal planning, or tool mechanics.
+    - If relevant context still does not contain the answer, reply exactly: "Saya tidak dapat menemukan informasi tersebut dalam dokumen kebijakan yang tersedia."
+    - If you used retrieved context, cite with chunk indices like [1], [2].
+    - Do not include a "Referensi" section in the answer. Source details are rendered separately by the interface.`;
+
+  const userPrompt = `Long-term memory (summary):
+    ${longTermMemory || 'Belum ada percakapan sebelumnya.'}
+    
+    Short-term memory (last messages):
+    ${shortTermMemory}
+    
+    Available knowledge base documents:
+    ${docsCatalog}
+    
+    Current user question:
+    ${question}`;
+
+    return { systemPrompt, userPrompt };
 }
