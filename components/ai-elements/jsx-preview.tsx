@@ -22,6 +22,7 @@ interface JSXPreviewContextValue {
   isStreaming: boolean;
   error: Error | null;
   setError: (error: Error | null) => void;
+  lastGoodJsx: string;
   setLastGoodJsx: (jsx: string) => void;
   components: JsxParserProps["components"];
   bindings: JsxParserProps["bindings"];
@@ -164,6 +165,7 @@ export const JSXPreview = memo(
         error,
         isStreaming,
         jsx,
+        lastGoodJsx,
         onErrorProp: onError,
         processedJsx,
         setError,
@@ -175,6 +177,7 @@ export const JSXPreview = memo(
         error,
         isStreaming,
         jsx,
+        lastGoodJsx,
         onError,
         processedJsx,
         setError,
@@ -203,6 +206,7 @@ export const JSXPreviewContent = memo(
       components,
       bindings,
       setError,
+      lastGoodJsx,
       setLastGoodJsx,
       onErrorProp,
     } = useJSXPreview();
