@@ -144,7 +144,7 @@ export const JSXPreview = memo(
   }: JSXPreviewProps) => {
     const [prevJsx, setPrevJsx] = useState(jsx);
     const [error, setError] = useState<Error | null>(null);
-    const [_lastGoodJsx, setLastGoodJsx] = useState("");
+    const [lastGoodJsx, setLastGoodJsx] = useState("");
 
     // Clear error when jsx changes (derived state pattern)
     if (jsx !== prevJsx) {
@@ -154,7 +154,7 @@ export const JSXPreview = memo(
 
     const processedJsx = useMemo(
       () => (isStreaming ? completeJsxTag(jsx) : jsx),
-      [jsx, isStreaming]
+      [jsx, isStreaming],
     );
 
     const contextValue = useMemo(
@@ -178,7 +178,7 @@ export const JSXPreview = memo(
         onError,
         processedJsx,
         setError,
-      ]
+      ],
     );
 
     return (
@@ -188,7 +188,7 @@ export const JSXPreview = memo(
         </div>
       </JSXPreviewContext.Provider>
     );
-  }
+  },
 );
 
 JSXPreview.displayName = "JSXPreview";
@@ -233,7 +233,7 @@ export const JSXPreviewContent = memo(
         setError(err);
         onErrorProp?.(err);
       },
-      [processedJsx, isStreaming, onErrorProp, setError]
+      [processedJsx, isStreaming, onErrorProp, setError],
     );
 
     // Track the last JSX that rendered without error
@@ -245,8 +245,7 @@ export const JSXPreviewContent = memo(
     }, [processedJsx, setLastGoodJsx]);
 
     // During streaming, if the current JSX errored, re-render with last good version
-    const displayJsx =
-      isStreaming && hadError ? lastGoodJsxRef.current : processedJsx;
+    const displayJsx = isStreaming && hadError ? lastGoodJsx : processedJsx;
 
     return (
       <div className={cn("jsx-preview-content", className)} {...props}>
@@ -259,7 +258,7 @@ export const JSXPreviewContent = memo(
         />
       </div>
     );
-  }
+  },
 );
 
 JSXPreviewContent.displayName = "JSXPreviewContent";
@@ -270,7 +269,7 @@ export type JSXPreviewErrorProps = ComponentProps<"div"> & {
 
 const renderChildren = (
   children: ReactNode | ((error: Error) => ReactNode),
-  error: Error
+  error: Error,
 ): ReactNode => {
   if (typeof children === "function") {
     return children(error);
@@ -290,7 +289,7 @@ export const JSXPreviewError = memo(
       <div
         className={cn(
           "flex items-center gap-2 rounded-md border border-destructive/50 bg-destructive/10 p-3 text-destructive text-sm",
-          className
+          className,
         )}
         {...props}
       >
@@ -304,7 +303,7 @@ export const JSXPreviewError = memo(
         )}
       </div>
     );
-  }
+  },
 );
 
 JSXPreviewError.displayName = "JSXPreviewError";
