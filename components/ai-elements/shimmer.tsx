@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/static-components -- motion components are cached at module level via motionComponentCache */
 "use client";
 
 import { cn } from "@/lib/utils";

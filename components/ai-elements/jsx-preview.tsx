@@ -211,13 +211,12 @@ export const JSXPreviewContent = memo(
       onErrorProp,
     } = useJSXPreview();
     const errorReportedRef = useRef<string | null>(null);
-    const [hadError, setHadError] = useState(false);
+    const [erroredJsx, setErroredJsx] = useState<string | null>(null);
+    const hadError = erroredJsx === processedJsx;
 
     // Reset error tracking when jsx changes
     useEffect(() => {
       errorReportedRef.current = null;
-      // oxlint-disable-next-line react-hooks/set-state-in-effect
-      setHadError(false);
     }, [processedJsx]);
 
     const handleError = useCallback(
@@ -230,7 +229,7 @@ export const JSXPreviewContent = memo(
 
         // During streaming, suppress errors and fall back to last good JSX
         if (isStreaming) {
-          setHadError(true);
+          setErroredJsx(processedJsx);
           return;
         }
 
