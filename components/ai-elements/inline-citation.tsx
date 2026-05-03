@@ -171,7 +171,9 @@ export const InlineCitationCarouselIndex = ({
       return;
     }
 
+    // oxlint-disable-next-line react-hooks/set-state-in-effect
     setCount(api.scrollSnapList().length);
+    // oxlint-disable-next-line react-hooks/set-state-in-effect
     setCurrent(api.selectedScrollSnap() + 1);
 
     api.on("select", syncState);

@@ -207,12 +207,12 @@ export const JSXPreviewContent = memo(
       onErrorProp,
     } = useJSXPreview();
     const errorReportedRef = useRef<string | null>(null);
-    const lastGoodJsxRef = useRef("");
     const [hadError, setHadError] = useState(false);
 
     // Reset error tracking when jsx changes
     useEffect(() => {
       errorReportedRef.current = null;
+      // oxlint-disable-next-line react-hooks/set-state-in-effect
       setHadError(false);
     }, [processedJsx]);
 
@@ -239,7 +239,6 @@ export const JSXPreviewContent = memo(
     // Track the last JSX that rendered without error
     useEffect(() => {
       if (!errorReportedRef.current) {
-        lastGoodJsxRef.current = processedJsx;
         setLastGoodJsx(processedJsx);
       }
     }, [processedJsx, setLastGoodJsx]);
