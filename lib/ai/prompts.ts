@@ -199,7 +199,7 @@ export function getGenerateConversationSummaryPrompt(
   shortTermMemoryStr: string,
   question: string,
   answer: string,
-){
+) {
   const systemPrompt = `You summarize assistant conversations for memory updates.
     Rules:
     - Respond in Indonesian.
@@ -207,8 +207,8 @@ export function getGenerateConversationSummaryPrompt(
     - Keep important user intent, constraints, and resolved points.
     - Plain text only: no markdown (no **, __, #, backticks, bullets, or link syntax).
     `;
-  
-  const userPrompt = `Previous summary:\n${previousSummary || 'Belum ada ringkasan sebelumnya.'}
+
+  const userPrompt = `Previous summary:\n${previousSummary || "Belum ada ringkasan sebelumnya."}
     
     Recent short-term messages:\n${shortTermMemoryStr}
     
@@ -218,14 +218,14 @@ export function getGenerateConversationSummaryPrompt(
     
     Write an updated cumulative summary.`;
 
-  return { systemPrompt, userPrompt };  
+  return { systemPrompt, userPrompt };
 }
 
 export function getAgenticRagPrompt(
   longTermMemory: string,
   shortTermMemory: string,
   docsCatalog: string,
-  question: string
+  question: string,
 ) {
   const systemPrompt = `You are Sahabat Keuangan, an assistant for OJK.
     You are allowed to use tools and decide the best strategy for each user question.
@@ -252,7 +252,7 @@ export function getAgenticRagPrompt(
     - Do not include a "Referensi" section in the answer. Source details are rendered separately by the interface.`;
 
   const userPrompt = `Long-term memory (summary):
-    ${longTermMemory || 'Belum ada percakapan sebelumnya.'}
+    ${longTermMemory || "Belum ada percakapan sebelumnya."}
     
     Short-term memory (last messages):
     ${shortTermMemory}
@@ -263,5 +263,45 @@ export function getAgenticRagPrompt(
     Current user question:
     ${question}`;
 
-    return { systemPrompt, userPrompt };
+  return { systemPrompt, userPrompt };
+}
+
+export function getCreateQuizPrompt(chats: string) {
+  const systemPrompt = `
+  You are an advanced "Cognitive Assessment Engine". Your objective is to process the provided flattened chat history and synthesize a multiple-choice quiz to evaluate comprehension of the conversation.
+
+  STRICT EXECUTION PARAMETERS:
+  1. Quantity Constraint: You MUST generate exactly 5 questions. No more, no less.
+  2. Grounding Constraint (Zero-Hallucination): All questions, distractors, and rationales MUST be extracted exclusively from the provided chat history. Extrapolation or introduction of external knowledge is strictly prohibited.
+  3. Mandatory Language Constraint: Although these instructions are written in English, the generated quiz content (the questions, choices, answer keys, and rationales) MUST be written entirely in professional Indonesian (Bahasa Indonesia).
+  4. Strict JSON Output: You are restricted to outputting ONLY valid JSON. Absolutely NO markdown formatting (e.g., do not wrap in \`\`\`json), NO preambles, NO epilogues, and NO conversational filler.
+
+  EXPECTED JSON SCHEMA:
+  {
+    "quiz": [
+      {
+        "id": 1,
+        "question": "<String: The specific question derived from the context, written in Indonesian>",
+        "options": [
+          "<String: Option A in Indonesian>",
+          "<String: Option B in Indonesian>",
+          "<String: Option C in Indonesian>",
+          "<String: Option D in Indonesian>"
+        ],
+        "answer": "<String: The exact matching string of the correct option from the 'pilihan' array>",
+        "reason": "<String: A comprehensive explanation in Indonesian detailing why this answer is correct based on the chat content>"
+      }
+    ]
+  }`;
+
+  const userPrompt = `
+    Execute the quiz computation based on the following data. Remember: Output MUST be valid JSON ONLY and the content MUST be in Indonesian.
+
+    <chat_history>
+    ${chats}
+    </chat_history>
+
+    JSON Execution:`;
+
+  return { systemPrompt, userPrompt };
 }

@@ -145,6 +145,7 @@ export function shouldForceQuestionTool(question: string): boolean {
   return personalCasePattern.test(normalizedQuestion) && !generalExplanationPattern.test(normalizedQuestion);
 }
 
+
 export function createQuestionId(question: string): string {
   const slug = question
     .toLowerCase()

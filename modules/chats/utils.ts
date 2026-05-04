@@ -1,8 +1,6 @@
 import { AgenticKnowledgeDocument } from "@/lib/ai/rag";
 import { OjkIntent } from "@/lib/ai/intent";
-import {
-  updateChatMetadata,
-} from "@/modules/chats/repository";
+import { updateChatMetadata } from "@/modules/chats/repository";
 import { getMessagesByChatId } from "@/modules/messages/repository";
 import { fetchAllAvailableDocuments } from "@/modules/documents/service";
 import type { Chats, ChatMetadataShape, ClientMessageSnapshot } from "./type";
@@ -15,7 +13,9 @@ const SUMMARY_SNAPSHOT_MAX_CONTENT = 32000;
 
 // ─── Metadata helpers ───────────────────────────────────────────────
 
-export function parseChatMetadata(metadataRaw: string | null): ChatMetadataShape {
+export function parseChatMetadata(
+  metadataRaw: string | null,
+): ChatMetadataShape {
   if (!metadataRaw) return {};
 
   try {
@@ -106,7 +106,9 @@ export function formatConversationForSummary(
     .join("\n");
 }
 
-export function formatClientSnapshotForSummary(msgs: ClientMessageSnapshot[]): string {
+export function formatClientSnapshotForSummary(
+  msgs: ClientMessageSnapshot[],
+): string {
   const lastMessages = msgs.slice(-40);
   return lastMessages
     .map((message) => {
@@ -115,6 +117,18 @@ export function formatClientSnapshotForSummary(msgs: ClientMessageSnapshot[]): s
     })
     .filter((line) => line.length > 0)
     .join("\n");
+}
+
+export function formatConversation(msg: Chats[]): string {
+  let flattennedConversation = "";
+  for (const m of msg) {
+    if (m.senderType === "user") {
+      flattennedConversation += `User: ${String(m.content || "").trim()}\n`;
+    } else {
+      flattennedConversation += `Chatbot: ${String(m.content || "").trim()}\n`;
+    }
+  }
+  return flattennedConversation;
 }
 
 // ─── Client snapshot helpers ────────────────────────────────────────

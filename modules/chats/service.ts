@@ -1,6 +1,7 @@
 import {
   createAgenticRagStream,
   generateConversationSummary,
+  generateQuiz,
 } from "@/lib/ai/rag";
 import {
   createChatRecord,
@@ -28,6 +29,7 @@ import {
   clientSnapshotToChats,
   mapKnowledgeDocuments,
   buildDefaultNamespaces,
+  formatConversation,
 } from "./utils";
 
 export { normalizeClientMessageSnapshot } from "./utils";
@@ -190,4 +192,13 @@ export async function generateChatIntentSummary(
     intent,
     summary,
   };
+}
+
+export async function startQuiz(chatId: string) {
+  const conversations = await getMessagesByChatId(chatId);
+  if (!conversations) throw new Error("Chat not found");
+
+  const flattenedConversations = formatConversation(conversations);
+  const createdQuiz = await generateQuiz(flattenedConversations);
+  return createdQuiz;
 }
