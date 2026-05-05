@@ -14,6 +14,7 @@ import {
   type ChatSource,
 } from "@/lib/api/chat"
 import MessageBubble, { type UIMessage } from "@/components/message"
+import Quiz from "@/components/quiz"
 
 type ChatHistory = { id: string; title: string }
 
@@ -181,6 +182,7 @@ export default function ChatbotWidget({ onClose }: ChatbotWidgetProps) {
   const [riwayatList, setRiwayatList] = useState<ChatHistory[]>([])
   const [activeItemMenu, setActiveItemMenu] = useState<string | null>(null)
   const [copySuccess, setCopySuccess] = useState(false)
+  const [showQuiz, setShowQuiz] = useState(false)
 
   const [tooltipClose, setTooltipClose] = useState(false)
   const [tooltipDot, setTooltipDot] = useState(false)
@@ -229,7 +231,6 @@ export default function ChatbotWidget({ onClose }: ChatbotWidgetProps) {
 
   // Dipanggil saat user pilih opsi radio dari backend question event
   const handleFlowOption = (_questionId: string, _optionId: string, optionLabel: string) => {
-    // tambah pesan user di sini, sendToBackend TIDAK menambah lagi
     setMessages((p) => [...p, { text: optionLabel, sender: "user" }])
     sendToBackend(optionLabel)
   }
@@ -245,7 +246,6 @@ export default function ChatbotWidget({ onClose }: ChatbotWidgetProps) {
       return [...p, { text: "", sender: "bot" as const }]
     })
 
-    // Closure agar onToken bisa update index yang benar
     const getBotIdx = () => botIdx
 
     try {
@@ -495,6 +495,8 @@ export default function ChatbotWidget({ onClose }: ChatbotWidgetProps) {
                   <button onClick={handleChatBaru} className="dot-menu-item w-full text-left px-3 py-2 text-[11px] font-semibold text-gray-800 transition">Chat Baru</button>
                   <div style={{ height: "1px", background: "#f0f0f0" }} />
                   <button onClick={handleToggleRiwayat} className="dot-menu-item w-full text-left px-3 py-2 text-[11px] font-semibold text-gray-800 transition">Riwayat Chat</button>
+                  <div style={{ height: "1px", background: "#f0f0f0" }} />
+                  <button onClick={() => { if (chatId) { setShowQuiz(true); setShowDotMenu(false) } }} disabled={!chatId} className="dot-menu-item w-full text-left px-3 py-2 text-[11px] font-semibold text-gray-800 transition disabled:opacity-40">Quiz</button>
                 </div>
               )}
             </div>
@@ -547,7 +549,7 @@ export default function ChatbotWidget({ onClose }: ChatbotWidgetProps) {
 
           {/* Area chat + input */}
           <div
-            className="flex-1 flex flex-col min-h-0 px-4 pb-4 pt-2 transition-all duration-200"
+            className="flex-1 flex flex-col min-h-0 px-4 pb-4 pt-2 transition-all duration-200 relative"
             style={{ filter: showRiwayat ? "blur(1.5px)" : "none" }}
           >
             <div ref={chatContainerRef} className="chat-scroll flex-1 overflow-y-auto space-y-3 flex flex-col pr-1">
@@ -598,6 +600,11 @@ export default function ChatbotWidget({ onClose }: ChatbotWidgetProps) {
                 <div ref={chatEndRef} />
               </div>
             </div>
+
+            {/* Quiz overlay */}
+            {showQuiz && chatId && (
+              <Quiz chatId={chatId} onClose={() => setShowQuiz(false)} />
+            )}
 
             {/* Input + Kirim + Salin */}
             <div className="mt-2 flex items-end gap-1 flex-shrink-0">
