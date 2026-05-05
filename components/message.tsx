@@ -1,5 +1,16 @@
 "use client"
-import { type FlowStep, type FlowResult } from "@/lib/chatflow"
+
+export type FlowStep = {
+  id: string
+  question: string
+  options: { label: string; value: string }[]
+  next: Record<string, string>
+}
+
+export type FlowResult = {
+  answer: string
+  actions?: { label: string; url: string }[]
+}
 
 export type UIMessage = {
   text: string
@@ -62,21 +73,21 @@ export default function Message({ msg, index, onFlowOption }: MessageProps) {
 
     {/* tombol di luar bubble */}
     {msg.flow?.result?.actions && (
-  <div className="grid grid-cols-2 gap-1 mt-1 w-full">
-    {msg.flow.result.actions.map((action, ai) => (
-      <a
-        key={ai}
-        href={action.url}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="text-[10px] font-semibold px-1.5 py-[4px] rounded w-full text-center text-white hover:opacity-80 transition"
-        style={{ background: "#a11212" }}
-      >
-        {action.label}
-      </a>
-    ))}
-  </div>
-)}
+      <div className="grid grid-cols-2 gap-1 mt-1 w-full">
+        {msg.flow.result.actions.map((action, ai) => (
+          <a
+            key={ai}
+            href={action.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-[10px] font-semibold px-1.5 py-[4px] rounded w-full text-center text-white hover:opacity-80 transition"
+            style={{ background: "#a11212" }}
+          >
+            {action.label}
+          </a>
+        ))}
+      </div>
+    )}
 
   </div>
 )

@@ -1,4 +1,3 @@
-// Alur pertanyaan bertahap (multi-step clarification) untuk kasus penipuan keuangan
 export type FlowOption = {
   label: string
   value: string

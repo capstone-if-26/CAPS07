@@ -3,27 +3,20 @@
 import { useState, useRef, useEffect } from "react"
 import Image from "next/image"
 import {
-  startNewChat,
-  continueChat,
+  streamChatReply,
   getChatHistory,
   saveChatId,
   getSavedChatId,
   clearChatId,
   type Message,
+  type ChatQuestion,
+  type ChatTaskEvent,
+  type ChatSource,
 } from "@/lib/api/chat"
-import {
-  getStep,
-  getResult,
-  PENIPUAN_TRIGGER,
-  PENIPUAN_SAYA_TRIGGER,
-  type FlowStep,
-  type FlowResult,
-} from "@/lib/chatflow"
 import MessageBubble, { type UIMessage } from "@/components/message"
 
 type ChatHistory = { id: string; title: string }
 
-// Menu cepat (shortcut pertanyaan)
 const QUICK_MENU = [
   "Cek Legalitas Pinjol / Investasi",
   "Hak Saya sebagai Konsumen Keuangan",
@@ -35,7 +28,6 @@ const QUICK_MENU = [
   "Cara Lapor / Pengaduan ke OJK",
 ]
 
-// Tooltip component
 function Tooltip({
   label,
   anchor = "center",
@@ -70,7 +62,6 @@ function Tooltip({
     }}>
       {label}
       {dir === "down" ? (
-        /* panah ke atas (tooltip di bawah elemen) */
         <span style={{
           position: "absolute", bottom: "100%",
           left: arrowLeft, right: arrowRight, transform: arrowTransform,
@@ -79,7 +70,6 @@ function Tooltip({
           borderBottom: "4px solid #c21f26",
         }} />
       ) : (
-        /* panah ke bawah (tooltip di atas elemen) */
         <span style={{
           position: "absolute", top: "100%",
           left: arrowLeft, right: arrowRight, transform: arrowTransform,
@@ -92,7 +82,6 @@ function Tooltip({
   )
 }
 
-// Dropdown hapus
 function HapusDropdown({
   itemId, btnRef, onHapus, onClose,
 }: {
@@ -140,7 +129,6 @@ function HapusDropdown({
   )
 }
 
-// Item riwayat
 function RiwayatItem({
   item, isActive, onToggleMenu, onHapus, onLoad, onCloseMenu,
 }: {
@@ -168,8 +156,6 @@ function RiwayatItem({
         >
           ···
         </button>
-
-        {/* Dropdown hapus*/}
         {isActive && (
           <HapusDropdown itemId={item.id} btnRef={btnRef} onHapus={onHapus} onClose={onCloseMenu} />
         )}
@@ -178,7 +164,6 @@ function RiwayatItem({
   )
 }
 
-// ChatbotWidget
 type ChatbotWidgetProps = {
   onClose: () => void
 }
@@ -189,6 +174,7 @@ export default function ChatbotWidget({ onClose }: ChatbotWidgetProps) {
   const [input, setInput] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const [showScrollBtn, setShowScrollBtn] = useState(false)
+  const [chatId, setChatId] = useState<string | null>(null)
 
   const [showDotMenu, setShowDotMenu] = useState(false)
   const [showRiwayat, setShowRiwayat] = useState(false)
@@ -201,31 +187,16 @@ export default function ChatbotWidget({ onClose }: ChatbotWidgetProps) {
   const [tooltipSalin, setTooltipSalin] = useState(false)
   const [tooltipKirim, setTooltipKirim] = useState(false)
 
-  // Flow state (dummy alur pertanyaan bertahap)
-  const [currentFlowStep, setCurrentFlowStep] = useState<string | null>(null)
-  const [waitingForKronologi, setWaitingForKronologi] = useState(false)
-  const [lastFlowType, setLastFlowType] = useState<string | null>(null)
-
   const chatEndRef = useRef<HTMLDivElement>(null)
   const chatContainerRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const dotMenuRef = useRef<HTMLDivElement>(null)
 
-  useEffect(() => { clearChatId(); setMessages([]) }, [])
-
+  // Selalu mulai chat baru saat pertama load
   useEffect(() => {
-    const chatId = getSavedChatId()
-    if (!chatId) return
-    getChatHistory(chatId)
-      .then((res) => {
-        if (res.status && res.data.messages.length > 0) {
-          setMessages(res.data.messages.map((m: Message) => ({
-            text: m.content,
-            sender: m.senderType === "user" ? "user" : "bot",
-          })))
-        }
-      })
-      .catch(() => clearChatId())
+    clearChatId()
+    setChatId(null)
+    setMessages([])
   }, [])
 
   useEffect(() => {
@@ -250,210 +221,156 @@ export default function ChatbotWidget({ onClose }: ChatbotWidgetProps) {
     return () => document.removeEventListener("mousedown", fn)
   }, [])
 
-  // auto resize textarea
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setInput(e.target.value)
     const el = textareaRef.current
     if (el) { el.style.height = "auto"; el.style.height = Math.min(el.scrollHeight, 62) + "px" }
   }
 
-  // handle pilihan radio button flow
-  const handleFlowOption = (stepId: string, optionValue: string, optionLabel: string) => {
+  // Dipanggil saat user pilih opsi radio dari backend question event
+  const handleFlowOption = (_questionId: string, _optionId: string, optionLabel: string) => {
+    // tambah pesan user di sini, sendToBackend TIDAK menambah lagi
     setMessages((p) => [...p, { text: optionLabel, sender: "user" }])
-    
-
-    if (optionValue === "custom" || optionValue === "custom_input") {
-  setCurrentFlowStep(null)
-  setWaitingForKronologi(true)
-
-  // deteksi jenis kasus dari step
-  if (stepId.includes("pinjol")) setLastFlowType("pinjol")
-  else if (stepId.includes("investasi")) setLastFlowType("investasi")
-  else setLastFlowType("transaksi")
-
-  setMessages((p) => [...p, {
-    text: "Silakan ceritakan kronologi singkatnya ya, supaya aku bisa bantu lebih tepat.",
-    sender: "bot",
-  }])
-  return
-}
-
-    const step = getStep(stepId)
-    if (!step) return
-
-    const nextStepId = step.next[optionValue]
-    if (!nextStepId) return
-
-    if (nextStepId === "custom_input") {
-      setCurrentFlowStep(null)
-      setMessages((p) => [...p, {
-        text: "Silakan ceritakan kronologi singkatnya ya, supaya aku bisa bantu lebih tepat.",
-        sender: "bot",
-      }])
-      return
-    }
-
-    // cek apakah next adalah result (end_*)
-    const result = getResult(nextStepId)
-if (result) {
-  setCurrentFlowStep(null)
-
-  if (nextStepId === "end_kronologi") {
-    setWaitingForKronologi(true)
-
-    setMessages((p) => [...p, {
-      text: result.answer,
-      sender: "bot",
-    }])
-
-    return
+    sendToBackend(optionLabel)
   }
 
-  setMessages((p) => [...p, {
-    text: result.answer,
-    sender: "bot",
-    flow: { result },
-  }])
-  return
-}
-
-    const nextStep = getStep(nextStepId)
-    if (nextStep) {
-      setCurrentFlowStep(nextStepId)
-      setMessages((p) => [...p, {
-        text: nextStep.question,
-        sender: "bot",
-        flow: { step: nextStep },
-      }])
-    }
-  }
-
-  // Kirim pesan
-  const handleSend = async (customText?: string, fromQuickMenu = false) => {
-  const text = (customText ?? input).trim()
-  if (!text || isLoading) return
-
-  setMessages((p) => [...p, { text, sender: "user" }])
-
-  if (!customText) {
-    setInput("")
-    if (textareaRef.current) textareaRef.current.style.height = "auto"
-  }
-
-  if (waitingForKronologi) {
-    setWaitingForKronologi(false)
-
-    let resultKey = "after_kronologi_pinjol"
-
-    if (lastFlowType === "investasi") {
-      resultKey = "after_kronologi_investasi"
-    }
-
-    const result = getResult(resultKey)
-
-    if (result) {
-  setTimeout(() => {
-    const parts = result.answer.split(/\n\nBerikut yang bisa kamu lakukan:/i)
-
-    if (parts.length > 1) {
-      setMessages((p) => [...p, {
-        text: parts[0].trim(),
-        sender: "bot",
-      }])
-
-  setTimeout(() => {
-    setMessages((p) => [...p, {
-      text: "Berikut yang bisa kamu lakukan:\n" + parts[1].trim(),
-      sender: "bot",
-    }])
-
-  setTimeout(() => {
-    setMessages((p) => [...p, {
-      text: "",
-      sender: "bot",
-      flow: { result },
-    }])
-  }, 100)
-}, 300)
-
-    } else {
-      // fallback
-      setMessages((p) => [...p, {
-        text: result.answer,
-        sender: "bot",
-        flow: { result },
-      }])
-    }
-  }, 400)
-}
-
-    return // stop disini (dummy)
-  }
-
-    // cek trigger alur penipuan
-const lowerText = text.toLowerCase()
-const isPenipuanTrigger = 
-  lowerText === PENIPUAN_TRIGGER.toLowerCase() ||
-  lowerText === PENIPUAN_SAYA_TRIGGER.toLowerCase() ||
-  lowerText.includes("kena penipuan") ||
-  lowerText.includes("penipuan keuangan") ||
-  lowerText.includes("saya kena penipuan")
-
-if (isPenipuanTrigger && !fromQuickMenu) {
-  const firstStep = getStep("step1")
-  if (firstStep) {
-    setCurrentFlowStep("step1")
-    setTimeout(() => {
-      setMessages((p) => [...p, {
-        text: firstStep.question,
-        sender: "bot",
-        flow: { step: firstStep },
-      }])
-    }, 400)
-    return
-  }
-}
-
+  // Core: kirim ke backend via streaming (TIDAK menambah pesan user, hanya bot)
+  const sendToBackend = async (text: string) => {
     setIsLoading(true)
+
+    // Tambah placeholder pesan bot untuk di-stream
+    let botIdx = -1
+    setMessages((p) => {
+      botIdx = p.length
+      return [...p, { text: "", sender: "bot" as const }]
+    })
+
+    // Closure agar onToken bisa update index yang benar
+    const getBotIdx = () => botIdx
+
     try {
-      const chatId = getSavedChatId()
-      let answer = ""
-      if (!chatId) {
-        const res = await startNewChat(text)
-        if (res.status) {
-          saveChatId(res.data.chatId); answer = res.data.answer
-          setRiwayatList((p) => [{
-            id: res.data.chatId,
-            title: text.length > 40 ? text.substring(0, 40) + "..." : text,
-          }, ...p])
+      await streamChatReply({
+        question: text,
+        chatId,
+        onChatId: (newId) => {
+          setChatId(newId)
+          saveChatId(newId)
+          setRiwayatList((p) => {
+            if (p.find(r => r.id === newId)) return p
+            return [{
+              id: newId,
+              title: text.length > 40 ? text.substring(0, 40) + "..." : text,
+            }, ...p]
+          })
+        },
+        onToken: (chunk) => {
+          setMessages((p) => {
+            const updated = [...p]
+            const idx = getBotIdx()
+            if (idx >= 0 && updated[idx]) {
+              updated[idx] = { ...updated[idx], text: updated[idx].text + chunk }
+            }
+            return updated
+          })
+        },
+        onTask: (task: ChatTaskEvent) => {
+          if (task.status === "error") {
+            setMessages((p) => {
+              const updated = [...p]
+              const idx = getBotIdx()
+              if (idx >= 0 && updated[idx]) {
+                updated[idx] = {
+                  ...updated[idx],
+                  text: "Maaf, terjadi kendala saat memproses pesanmu. Silakan coba beberapa saat lagi.",
+                }
+              }
+              return updated
+            })
+          }
+        },
+        onSource: (source: ChatSource) => {
+          setMessages((p) => {
+            const updated = [...p]
+            const idx = getBotIdx()
+            if (idx >= 0 && updated[idx]) {
+              const existing = updated[idx].flow?.result?.actions ?? []
+              updated[idx] = {
+                ...updated[idx],
+                flow: {
+                  result: {
+                    answer: updated[idx].text,
+                    actions: [...existing, { label: source.title, url: source.href }],
+                  },
+                },
+              }
+            }
+            return updated
+          })
+        },
+        onQuestion: (question: ChatQuestion) => {
+          setMessages((p) => {
+            const updated = [...p]
+            const idx = getBotIdx()
+            if (idx >= 0 && updated[idx]) {
+              updated[idx] = {
+                ...updated[idx],
+                flow: {
+                  step: {
+                    id: question.id,
+                    question: question.question,
+                    options: question.options.map(o => ({ label: o.label, value: o.id })),
+                    next: {},
+                  },
+                },
+              }
+            }
+            return updated
+          })
+        },
+      })
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Maaf, tidak dapat terhubung ke server. Silakan coba beberapa saat lagi."
+      setMessages((p) => {
+        const updated = [...p]
+        const idx = getBotIdx()
+        if (idx >= 0 && updated[idx]) {
+          updated[idx] = { ...updated[idx], text: msg }
         }
-      } else {
-        const res = await continueChat(chatId, text)
-        if (res.status) answer = res.data.answer
-      }
-      setMessages((p) => [...p, {
-        text: answer || "Maaf, terjadi kesalahan pada server.",
-        sender: "bot",
-      }])
-    } catch {
-      setMessages((p) => [...p, {
-        text: "Maaf, tidak dapat terhubung ke server. Silakan coba beberapa saat lagi.",
-        sender: "bot",
-      }])
-    } finally { setIsLoading(false) }
+        return updated
+      })
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleSend = async (customText?: string) => {
+    const text = (customText ?? input).trim()
+    if (!text || isLoading) return
+
+    setMessages((p) => [...p, { text, sender: "user" }])
+
+    if (!customText) {
+      setInput("")
+      if (textareaRef.current) textareaRef.current.style.height = "auto"
+    }
+
+    await sendToBackend(text)
   }
 
   const handleChatBaru = () => {
-    clearChatId(); setMessages([]); setCurrentFlowStep(null)
-    setShowDotMenu(false); setShowRiwayat(false)
+    clearChatId()
+    setChatId(null)
+    setMessages([])
+    setShowDotMenu(false)
+    setShowRiwayat(false)
   }
 
-  // Toggle riwayat
   const handleHapusRiwayat = (id: string) => {
     setRiwayatList((prev) => {
       const updated = prev.filter((item) => item.id !== id)
-      // Jika riwayat habis, otomatis tutup panel & reset chat
-      if (updated.length === 0) { clearChatId(); setMessages([]); setShowRiwayat(false) }
+      if (updated.length === 0) {
+        clearChatId(); setChatId(null); setMessages([]); setShowRiwayat(false)
+      }
       return updated
     })
     setActiveItemMenu(null)
@@ -461,6 +378,7 @@ if (isPenipuanTrigger && !fromQuickMenu) {
 
   const handleLoadRiwayat = (id: string) => {
     saveChatId(id)
+    setChatId(id)
     getChatHistory(id).then((res) => {
       if (res.status && res.data.messages.length > 0)
         setMessages(res.data.messages.map((m: Message) => ({
@@ -604,14 +522,10 @@ if (isPenipuanTrigger && !fromQuickMenu) {
               borderTop: "none",
               borderRadius: "0 0 6px 6px",
               animation: "slideInRiwayat 0.15s ease",
-            }}
-            >
-              {/* Judul */}
+            }}>
               <div className="text-center font-bold text-[11px] py-2" style={{ color: "#8C0000", borderBottom: "1px solid #eee" }}>
                 Riwayat Chat
               </div>
-
-              {/* List */}
               <div className="flex flex-col pb-1">
                 {riwayatList.length === 0 ? (
                   <p className="text-[10px] text-gray-400 text-center py-4">Belum ada riwayat chat.</p>
@@ -636,7 +550,6 @@ if (isPenipuanTrigger && !fromQuickMenu) {
             className="flex-1 flex flex-col min-h-0 px-4 pb-4 pt-2 transition-all duration-200"
             style={{ filter: showRiwayat ? "blur(1.5px)" : "none" }}
           >
-            {/* Scrollable content */}
             <div ref={chatContainerRef} className="chat-scroll flex-1 overflow-y-auto space-y-3 flex flex-col pr-1">
               {/* Greeting */}
               <div className="flex items-center gap-1.5 text-[11px] font-semibold text-[#a11212] flex-shrink-0">
@@ -650,11 +563,11 @@ if (isPenipuanTrigger && !fromQuickMenu) {
                 Mau cari info apa hari ini? Pilih aja layanan di bawah atau ketik langsung ya 👇
               </div>
 
-              {/* Menu (hanya tampil jika belum ada pesan) */}
+              {/* Quick Menu (hanya tampil jika belum ada pesan) */}
               {messages.length === 0 && (
                 <div className="grid grid-cols-2 gap-1 mx-auto max-w-[85%] font-semibold flex-shrink-0">
                   {QUICK_MENU.map((label, i) => (
-                    <button key={i} onClick={() => handleSend(label, true)} disabled={isLoading}
+                    <button key={i} onClick={() => handleSend(label)} disabled={isLoading}
                       className="bg-[#a11212] text-white text-[9px] px-1.5 py-[3px] rounded w-full hover:bg-[#8a0f0f] transition-colors disabled:opacity-50">
                       {label}
                     </button>
@@ -664,7 +577,7 @@ if (isPenipuanTrigger && !fromQuickMenu) {
 
               {/* Daftar pesan */}
               <div className="space-y-3 flex-1">
-                {messages.map((msg, i) => (
+                {messages.filter(msg => msg.text !== "" || msg.flow).map((msg, i) => (
                   <MessageBubble
                     key={i}
                     msg={msg}
@@ -673,7 +586,6 @@ if (isPenipuanTrigger && !fromQuickMenu) {
                   />
                 ))}
 
-                {/* Loading indicator */}
                 {isLoading && (
                   <div className="max-w-[85%] mx-auto flex flex-col">
                     <div className="bg-[#f3f3f3] border border-[#a11212] rounded-md p-2 self-start flex items-center gap-1">
@@ -713,7 +625,6 @@ if (isPenipuanTrigger && !fromQuickMenu) {
                   />
                 )}
 
-                {/* Tombol kirim */}
                 <div className="relative">
                   {tooltipKirim && <Tooltip label="Kirim Pesan" anchor="left" />}
                   <button
@@ -725,7 +636,6 @@ if (isPenipuanTrigger && !fromQuickMenu) {
                   >Kirim</button>
                 </div>
 
-                {/* Tombol salin */}
                 <div className="relative">
                   {tooltipSalin && <Tooltip label="Salin Ringkasan" anchor="right" />}
                   <button
