@@ -271,12 +271,17 @@ export function getCreateQuizPrompt(chats: string) {
   You are an advanced "Cognitive Assessment Engine". Your objective is to process the provided flattened chat history and synthesize a multiple-choice quiz to evaluate comprehension of the conversation.
 
   STRICT EXECUTION PARAMETERS:
-  1. Quantity Constraint: You MUST generate exactly 5 questions. No more, no less.
-  2. Grounding Constraint (Zero-Hallucination): All questions, distractors, and rationales MUST be extracted exclusively from the provided chat history. Extrapolation or introduction of external knowledge is strictly prohibited.
-  3. Mandatory Language Constraint: Although these instructions are written in English, the generated quiz content (the questions, choices, answer keys, and rationales) MUST be written entirely in professional Indonesian (Bahasa Indonesia).
-  4. Strict JSON Output: You are restricted to outputting ONLY valid JSON. Absolutely NO markdown formatting (e.g., do not wrap in \`\`\`json), NO preambles, NO epilogues, and NO conversational filler.
+  1. Data Sufficiency Evaluation (Primary Check): Before generating any questions, you must evaluate if the chat history contains enough factual statements, specific concepts, or meaningful exchanges to formulate valid questions.
+  2. Conditional Quantity Constraint:
+     - IF the data IS sufficient: You MUST generate between 3 to 5 questions.
+     - IF the data IS NOT sufficient (e.g., only contains greetings like "hello", extremely short phrases, or lacks substantive content): You MUST return an empty quiz array.
+  3. Grounding Constraint (Zero-Hallucination): All questions, distractors, and rationales MUST be extracted exclusively from the provided chat history. Extrapolation or introduction of external knowledge is strictly prohibited.
+  4. Mandatory Language Constraint: Although these instructions are written in English, the generated quiz content (the questions, choices, answer keys, and rationales) MUST be written entirely in professional Indonesian (Bahasa Indonesia).
+  5. Strict JSON Output: You are restricted to outputting ONLY valid JSON. Absolutely NO markdown formatting (e.g., do not wrap in \`\`\`json), NO preambles, NO epilogues, and NO conversational filler.
 
   EXPECTED JSON SCHEMA:
+  (Note: If the data is insufficient based on Parameter 1 & 2, return exactly { "quiz": [] })
+
   {
     "quiz": [
       {
@@ -288,19 +293,19 @@ export function getCreateQuizPrompt(chats: string) {
           "<String: Option C in Indonesian>",
           "<String: Option D in Indonesian>"
         ],
-        "answer": "<String: The exact matching string of the correct option from the 'pilihan' array>",
+        "answer": "<String: The exact matching string of the correct option from the 'options' array>",
         "reason": "<String: A comprehensive explanation in Indonesian detailing why this answer is correct based on the chat content>"
       }
     ]
   }`;
 
   const userPrompt = `
-    Execute the quiz computation based on the following data. Remember: Output MUST be valid JSON ONLY and the content MUST be in Indonesian.
+    Execute the quiz computation based on the following data. Remember: Evaluate data sufficiency first. Output MUST be valid JSON ONLY and the content MUST be in Indonesian.
 
     <chat_history>
     ${chats}
     </chat_history>
-
+    
     JSON Execution:`;
 
   return { systemPrompt, userPrompt };

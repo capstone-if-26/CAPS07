@@ -375,8 +375,21 @@ export async function generateQuiz(chats: string) {
       frequencyPenalty: 0,
     });
 
-    return text.trim();
-  } catch {
-    return "Maaf, saya belum bisa membuat kuis untuk percakapan ini.";
+    const sanitizedText = text
+      .replace(/```json/gi, "")
+      .replace(/```/gi, "")
+      .trim();
+    const parsedObject = JSON.parse(sanitizedText);
+    if (!parsedObject.quiz || !Array.isArray(parsedObject.quiz)) {
+      throw new Error(
+        "Skema JSON yang dihasilkan LLM tidak valid atau kehilangan array 'quiz'.",
+      );
+    }
+
+    return parsedObject.quiz;
+  } catch (error) {
+    throw new Error(
+      `Gagal menghasilkan kuis: ${error instanceof Error ? error.message : "Parsing JSON gagal"}`,
+    );
   }
 }

@@ -12,7 +12,7 @@ export async function GET(
   try {
     const { id } = await params;
     const quiz = await startQuiz(id);
-    return buildSuccessResponse({ quiz }, "Quiz berhasil dibuat", 200);
+    return buildSuccessResponse(quiz, "Quiz berhasil dibuat", 200);
   } catch (error) {
     let message = "Terjadi kesalahan internal";
 
