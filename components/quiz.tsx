@@ -11,7 +11,7 @@ type QuizQuestion = {
 };
 
 type QuizProps = {
-  chatId?: string;
+  chatId: string;
   onClose: () => void;
 };
 
@@ -29,35 +29,26 @@ export default function Quiz({ chatId, onClose }: QuizProps) {
     const signal = abortController.signal;
 
     const fetchQuiz = async () => {
-      if (!chatId) {
-        setError("Chat ID tidak ditemukan");
-        setLoading(false);
-        return;
-      }
-
       try {
         setLoading(true);
+        setError(null);
 
         const response = await fetch(`/api/chats/${chatId}/quiz`, { signal });
         const result = await response.json();
 
-        if (Array.isArray(result.data)) {
-          const quizArray: QuizQuestion[] = result.data;
-          if (quizArray.length > 0) {
-            setQuizData(quizArray);
-          } else {
-            setError(
-              "Konteks percakapan belum cukup untuk membuat quiz. Silakan lanjutkan obrolan untuk mengumpulkan lebih banyak materi.",
-            );
-          }
-        } else {
-          throw new Error(result.message || "Struktur respons API tidak valid");
+        if (!response.ok) {
+          setError(result?.message || "Gagal memuat quiz. Silakan coba beberapa saat lagi.");
+          return;
         }
-      } catch (err: any) {
-        if (err.name === "AbortError") return;
 
-        console.error("Error fetching quiz:", err);
-        setError("Terjadi kesalahan saat membuat quiz. Silakan coba lagi.");
+        if (Array.isArray(result.data) && result.data.length > 0) {
+          setQuizData(result.data);
+        } else {
+          setError(result?.message || "Soal quiz tidak tersedia untuk percakapan ini.");
+        }
+      } catch (err: unknown) {
+        if ((err as Error).name === "AbortError") return;
+        setError("Gagal memuat quiz. Silakan coba beberapa saat lagi.");
       } finally {
         if (!signal.aborted) {
           setLoading(false);
@@ -73,35 +64,30 @@ export default function Quiz({ chatId, onClose }: QuizProps) {
   }, [chatId]);
 
   const handleSelect = (qIdx: number, opt: string) => {
-    // Kunci opsi agar tidak bisa diubah jika sudah disubmit
     if (submitted[qIdx]) return;
     setAnswers((p) => ({ ...p, [qIdx]: opt }));
   };
 
   const handleSubmit = (qIdx: number) => {
-    // Jangan izinkan submit jika belum ada opsi yang dipilih
     if (!answers[qIdx]) return;
 
     setSubmitted((p) => ({ ...p, [qIdx]: true }));
 
-    // Jeda 300ms untuk efek psikologis agar user bisa melihat animasi transisi warna (benar/salah)
     setTimeout(() => {
       if (qIdx + 1 < quizData.length) {
         setVisible((p) => p + 1);
       } else {
         setShowResult(true);
       }
-    }, 500); // Saya perpanjang ke 500ms agar animasi lebih terlihat elegan
+    }, 500);
   };
 
-  // Komputasi O(n) tanpa redundansi pengecekan array
   const correctCount = quizData.filter(
     (q, i) => answers[i] === q.answer,
   ).length;
   const progress =
     quizData.length > 0 ? Object.keys(submitted).length / quizData.length : 0;
 
-  // Engine Styling Dinamis
   const getStyle = (qIdx: number, opt: string) => {
     if (!quizData[qIdx]) return "";
 
@@ -109,33 +95,29 @@ export default function Quiz({ chatId, onClose }: QuizProps) {
     const correct = quizData[qIdx].answer;
     const isSubmitted = submitted[qIdx];
 
-    // FASE 1: Belum Disubmit (Fase Pemilihan)
     if (!isSubmitted) {
       return selected === opt
-        ? "bg-[#a11212] border-[#a11212] text-white shadow-inner" // Warna solid jika terpilih
-        : "bg-white border-[#a11212] text-gray-700 hover:bg-red-50"; // Warna default dengan efek hover
+        ? "bg-green-500 border-green-500 text-white shadow-inner"
+        : "bg-[#f5f5f5] border-[#a11212] text-gray-700 hover:bg-gray-100";
     }
 
-    // FASE 2: Pasca-Submit (Fase Validasi/Koreksi)
     if (opt === correct) {
-      return "bg-green-500 border-green-600 text-white shadow-md scale-[1.02]"; // Opsi yang benar (hijau)
+      return "bg-green-500 border-green-600 text-white shadow-md scale-[1.02]";
     }
 
     if (opt === selected) {
-      return "bg-red-500 border-red-600 text-white"; // Opsi yang salah tapi dipilih user (merah)
+      return "bg-red-500 border-red-600 text-white";
     }
 
-    // Opsi yang tidak dipilih dan bukan jawaban benar (disable visual state)
     return "bg-gray-100 border-gray-200 text-gray-400 opacity-70";
   };
 
   if (loading) {
-    // [Bagian loading Anda tidak diubah karena sudah bagus]
     return (
       <>
         <div className="absolute inset-0 backdrop-blur-[3px] bg-black/20 z-40 rounded-2xl" />
         <div className="absolute inset-0 flex items-center justify-center z-50">
-          <div className="w-[92%] max-w-[320px] sm:max-w-[240px] sm:scale-[0.85] bg-[#a11212] rounded-2xl shadow-xl flex flex-col h-[420px] sm:h-[380px] overflow-hidden">
+          <div className="w-[92%] max-w-[320px] sm:max-w-[240px] sm:scale-[0.85] bg-[#a11212] rounded-2xl shadow-xl flex flex-col h-[420px] sm:h-[380px] overflow-hidden" style={{ border: "1px solid #c21f26" }}>
             <div className="flex items-center px-4 py-2">
               <Image src="/ikon-quiz.png" alt="" width={18} height={18} />
               <span className="text-white text-sm sm:text-xs font-bold ml-2 flex-1 brightness-0 invert">
@@ -157,13 +139,12 @@ export default function Quiz({ chatId, onClose }: QuizProps) {
     );
   }
 
-  if (error || quizData.length === 0) {
-    // [Bagian error Anda tidak diubah]
+  if (error) {
     return (
       <>
         <div className="absolute inset-0 backdrop-blur-[3px] bg-black/20 z-40 rounded-2xl" />
         <div className="absolute inset-0 flex items-center justify-center z-50">
-          <div className="w-[92%] max-w-[320px] sm:max-w-[240px] sm:scale-[0.85] bg-[#a11212] rounded-2xl shadow-xl flex flex-col h-[420px] sm:h-[380px] overflow-hidden">
+          <div className="w-[92%] max-w-[320px] sm:max-w-[240px] sm:scale-[0.85] bg-[#a11212] rounded-2xl shadow-xl flex flex-col h-[420px] sm:h-[380px] overflow-hidden" style={{ border: "1px solid #c21f26" }}>
             <div className="flex items-center px-4 py-2">
               <Image src="/ikon-quiz.png" alt="" width={18} height={18} />
               <span className="text-white text-sm sm:text-xs font-bold ml-2 flex-1 brightness-0 invert">
@@ -175,9 +156,7 @@ export default function Quiz({ chatId, onClose }: QuizProps) {
             </div>
             <div className="bg-[#f3f3f3] rounded-t-2xl px-4 py-3 flex-1 flex items-center justify-center">
               <div className="text-center">
-                <p className="text-[11px] text-red-600 mb-3">
-                  {error || "Quiz tidak tersedia"}
-                </p>
+                <p className="text-[11px] text-red-600 mb-3">{error}</p>
                 <button
                   onClick={onClose}
                   className="bg-[#a11212] text-white px-4 py-1.5 rounded-full text-[10px] font-bold"
@@ -197,7 +176,7 @@ export default function Quiz({ chatId, onClose }: QuizProps) {
       <div className="absolute inset-0 backdrop-blur-[3px] bg-black/20 z-40 rounded-2xl" />
 
       <div className="absolute inset-0 flex items-center justify-center z-50">
-        <div className="w-[92%] max-w-[320px] sm:max-w-[240px] sm:scale-[0.85] bg-[#a11212] rounded-2xl shadow-xl flex flex-col h-[420px] sm:h-[380px] overflow-hidden">
+        <div className="w-[92%] max-w-[320px] sm:max-w-[240px] sm:scale-[0.85] bg-[#a11212] rounded-2xl shadow-xl flex flex-col h-[420px] sm:h-[380px] overflow-hidden" style={{ border: "1px solid #c21f26" }}>
           {/* Header */}
           <div className="flex items-center px-4 py-2">
             <Image src="/ikon-quiz.png" alt="" width={18} height={18} />
@@ -205,14 +184,13 @@ export default function Quiz({ chatId, onClose }: QuizProps) {
               Quiz
             </span>
 
-            {/* Progress Bar */}
+            {/* Progress bar */}
             <div className="w-16 h-[6px] bg-white rounded-full overflow-hidden">
               <div
                 className="h-full transition-all duration-500"
                 style={{
                   width: `${progress * 100}%`,
-                  background:
-                    "linear-gradient(90deg, #ff6b6b, #ff0000, #ff6b6b)",
+                  background: "linear-gradient(90deg, #ff6b6b, #ff0000, #ff6b6b)",
                 }}
               />
             </div>
@@ -224,10 +202,11 @@ export default function Quiz({ chatId, onClose }: QuizProps) {
 
           {/* Body */}
           <div className="bg-[#f3f3f3] rounded-t-2xl px-4 py-3 flex-1 overflow-y-auto space-y-5 scroll-smooth">
-            <p className="text-[11px] font-bold text-gray-700">
-              Pilih jawaban yang menurutmu paling tepat. Setiap jawaban akan
-              langsung dikoreksi beserta penjelasannya.
-            </p>
+            <div className="pb-2 border-b border-[#a11212] mb-1">
+              <p className="text-[11px] font-bold text-gray-800">
+                Pilih jawaban yang menurutmu paling tepat. Setiap jawaban akan langsung dikoreksi beserta penjelasannya.
+              </p>
+            </div>
 
             {quizData.slice(0, visible).map((q, qIdx) => (
               <div
@@ -244,24 +223,25 @@ export default function Quiz({ chatId, onClose }: QuizProps) {
                   </p>
                 </div>
 
-                {/* Reason (Hanya muncul jika sudah disubmit) */}
+                {/* Reason */}
                 {submitted[qIdx] && (
                   <div className="pl-7 pr-2">
                     <p
-                      className={`text-[10px] sm:text-[9.5px] p-2 rounded-md ${answers[qIdx] === q.answer ? "bg-green-50 text-green-800" : "bg-red-50 text-red-800"}`}
+                      className={`text-[10px] sm:text-[9.5px] p-2 rounded-md ${
+                        answers[qIdx] === q.answer
+                          ? "bg-green-50 text-green-800"
+                          : "bg-red-50 text-red-800"
+                      }`}
                     >
                       <span className="font-bold">
-                        {answers[qIdx] === q.answer
-                          ? "✓ Tepat! "
-                          : "✗ Kurang tepat. "}
+                        {answers[qIdx] === q.answer ? "✓ Tepat! " : "✗ Kurang tepat. "}
                       </span>
                       {q.reason}
                     </p>
                   </div>
                 )}
 
-                {/* Options Grid */}
-                {/* Perhatikan: Kelas !border-[#a11212] telah DIBUANG dari sini */}
+                {/* Options */}
                 <div className="grid grid-cols-2 gap-2 pl-7 pr-2">
                   {q.options &&
                     q.options.map((opt, i) => (
@@ -269,18 +249,28 @@ export default function Quiz({ chatId, onClose }: QuizProps) {
                         key={i}
                         onClick={() => handleSelect(qIdx, opt)}
                         className={`
-                        text-[9.5px] sm:text-[8px] px-2 py-2 rounded-xl border-2
-                        text-center transition-all duration-300 select-none
-                        ${!submitted[qIdx] ? "cursor-pointer hover:shadow-sm" : "cursor-default"}
-                        ${getStyle(qIdx, opt)}
-                      `}
+                          text-[9.5px] sm:text-[8px] px-2 py-2 rounded-xl border
+                          flex items-center gap-1.5
+                          transition-all duration-300 select-none
+                          ${!submitted[qIdx] ? "cursor-pointer hover:shadow-sm" : "cursor-default"}
+                          ${getStyle(qIdx, opt)}
+                        `}
                       >
-                        {opt}
+                        {/* Bulatan radio di kiri */}
+                        <span className={`flex-shrink-0 w-3 h-3 rounded-full border-2 flex items-center justify-center
+                          ${answers[qIdx] === opt && !submitted[qIdx] ? "border-white" : "border-current opacity-60"}
+                          ${submitted[qIdx] && opt === q.answer ? "border-white" : ""}
+                        `}>
+                          {(answers[qIdx] === opt) && (
+                            <span className="w-1.5 h-1.5 rounded-full bg-white block" />
+                          )}
+                        </span>
+                        <span>{opt}</span>
                       </div>
                     ))}
                 </div>
 
-                {/* Submit Button */}
+                {/* Submit button */}
                 {!submitted[qIdx] && (
                   <div className="flex justify-center pl-7 mt-2">
                     <button
@@ -295,9 +285,7 @@ export default function Quiz({ chatId, onClose }: QuizProps) {
                         }
                       `}
                     >
-                      {qIdx === quizData.length - 1
-                        ? "Selesai"
-                        : "Kirim Jawaban"}
+                      Submit
                     </button>
                   </div>
                 )}
@@ -307,26 +295,23 @@ export default function Quiz({ chatId, onClose }: QuizProps) {
         </div>
       </div>
 
-      {/* Result Modal */}
+      {/* Result modal */}
       {showResult && (
         <div className="absolute inset-0 flex items-center justify-center bg-black/50 z-[60] backdrop-blur-sm">
           <div className="w-[260px] rounded-2xl overflow-hidden shadow-2xl animate-fade-in-scale">
-            <div className="bg-white text-center py-3 font-extrabold text-sm text-gray-800">
+            <div className="bg-white text-center py-3 font-extrabold text-sm text-gray-800 relative">
               🎉 Quiz Selesai!
-            </div>
-            <div className="bg-[#7a0000] text-white px-6 py-8 text-center relative flex flex-col items-center">
               <button
                 onClick={onClose}
-                className="absolute top-3 right-4 text-white/70 hover:text-white text-lg transition-colors"
+                className="absolute top-1/2 -translate-y-1/2 right-3 text-gray-400 hover:text-gray-600 text-lg transition-colors"
               >
                 ✕
               </button>
-
+            </div>
+            <div className="bg-[#7a0000] text-white px-6 py-8 text-center relative flex flex-col items-center">
               <h1 className="text-4xl font-extrabold tracking-tighter drop-shadow-md mb-1">
                 {correctCount}{" "}
-                <span className="text-2xl text-white/70">
-                  / {quizData.length}
-                </span>
+                <span className="text-2xl text-white/70">/ {quizData.length}</span>
               </h1>
 
               <p className="text-xs text-red-200 font-medium mb-4 uppercase tracking-wider">
@@ -350,7 +335,7 @@ export default function Quiz({ chatId, onClose }: QuizProps) {
                 }}
                 className="bg-white text-[#7a0000] hover:bg-gray-100 px-6 py-2.5 rounded-full text-xs font-bold transition-colors shadow-lg active:scale-95"
               >
-                Coba Lagi
+                Ulangi Quiz
               </button>
             </div>
           </div>

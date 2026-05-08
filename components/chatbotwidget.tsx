@@ -5,6 +5,7 @@ import Image from "next/image"
 import {
   streamChatReply,
   getChatHistory,
+  getIntentSummary,
   saveChatId,
   getSavedChatId,
   clearChatId,
@@ -12,6 +13,7 @@ import {
   type ChatQuestion,
   type ChatTaskEvent,
   type ChatSource,
+  type IntentSummaryMessageSnapshot,
 } from "@/lib/api/chat"
 import MessageBubble, { type UIMessage } from "@/components/message"
 import Quiz from "@/components/quiz"
@@ -182,6 +184,7 @@ export default function ChatbotWidget({ onClose }: ChatbotWidgetProps) {
   const [riwayatList, setRiwayatList] = useState<ChatHistory[]>([])
   const [activeItemMenu, setActiveItemMenu] = useState<string | null>(null)
   const [copySuccess, setCopySuccess] = useState(false)
+  const [copyLoading, setCopyLoading] = useState(false)
   const [showQuiz, setShowQuiz] = useState(false)
 
   const [tooltipClose, setTooltipClose] = useState(false)
@@ -246,6 +249,7 @@ export default function ChatbotWidget({ onClose }: ChatbotWidgetProps) {
       return [...p, { text: "", sender: "bot" as const }]
     })
 
+    // Closure agar onToken bisa update index yang benar
     const getBotIdx = () => botIdx
 
     try {
@@ -388,11 +392,28 @@ export default function ChatbotWidget({ onClose }: ChatbotWidgetProps) {
     setShowRiwayat(false)
   }
 
-  const handleCopy = () => {
-    if (!messages.length) return
-    navigator.clipboard.writeText(
-      messages.map((m) => `${m.sender === "user" ? "Saya" : "ROJAK"}: ${m.text}`).join("\n\n")
-    ).then(() => { setCopySuccess(true); setTimeout(() => setCopySuccess(false), 2000) })
+  const handleCopy = async () => {
+    if (!messages.length || !chatId || copyLoading) return
+    setCopyLoading(true)
+    try {
+      // Kirim snapshot pesan ke backend untuk diringkas
+      const snapshot: IntentSummaryMessageSnapshot[] = messages
+        .filter(m => m.text)
+        .map(m => ({ role: m.sender === "user" ? "user" : "assistant", content: m.text }))
+      const res = await getIntentSummary(chatId, snapshot)
+      const text = `Intent: ${res.data.intent}\n\nRingkasan:\n${res.data.summary}`
+      await navigator.clipboard.writeText(text)
+      setCopySuccess(true)
+      setTimeout(() => setCopySuccess(false), 2000)
+    } catch {
+      // Fallback: salin pesan mentah jika backend gagal
+      const fallback = messages.map(m => `${m.sender === "user" ? "Saya" : "ROJAK"}: ${m.text}`).join("\n\n")
+      await navigator.clipboard.writeText(fallback)
+      setCopySuccess(true)
+      setTimeout(() => setCopySuccess(false), 2000)
+    } finally {
+      setCopyLoading(false)
+    }
   }
 
   const handleToggleRiwayat = () => {
@@ -496,7 +517,7 @@ export default function ChatbotWidget({ onClose }: ChatbotWidgetProps) {
                   <div style={{ height: "1px", background: "#f0f0f0" }} />
                   <button onClick={handleToggleRiwayat} className="dot-menu-item w-full text-left px-3 py-2 text-[11px] font-semibold text-gray-800 transition">Riwayat Chat</button>
                   <div style={{ height: "1px", background: "#f0f0f0" }} />
-                  <button onClick={() => { if (chatId) { setShowQuiz(true); setShowDotMenu(false) } }} disabled={!chatId} className="dot-menu-item w-full text-left px-3 py-2 text-[11px] font-semibold text-gray-800 transition disabled:opacity-40">Quiz</button>
+                  <button onClick={() => { if (chatId) { setShowQuiz(true); setShowDotMenu(false) } }} disabled={!chatId} className="dot-menu-item w-full text-left px-3 py-2 text-[11px] font-semibold text-gray-800 transition disabled:opacity-40">Latihan Quiz</button>
                 </div>
               )}
             </div>
@@ -601,7 +622,7 @@ export default function ChatbotWidget({ onClose }: ChatbotWidgetProps) {
               </div>
             </div>
 
-            {/* Quiz overlay */}
+            {/* Quiz */}
             {showQuiz && chatId && (
               <Quiz chatId={chatId} onClose={() => setShowQuiz(false)} />
             )}
@@ -656,7 +677,9 @@ export default function ChatbotWidget({ onClose }: ChatbotWidgetProps) {
                     }}
                     className="hover:opacity-80 transition"
                   >
-                    {copySuccess ? (
+                    {copyLoading ? (
+                      <span style={{ color: "white", fontSize: "8px", fontWeight: 700 }}>...</span>
+                    ) : copySuccess ? (
                       <span style={{ color: "white", fontSize: "10px", fontWeight: 700 }}>✓</span>
                     ) : (
                       <Image src="/ikon-salin.png" alt="salin" width={13} height={13} quality={100} />
