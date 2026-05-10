@@ -36,3 +36,11 @@ export async function updateChatSummary(chatId: string, summary: string) {
     .returning();
   return updatedChat;
 }
+
+export async function updateChatMetadata(chatId: string, metadata: string) {
+  const [updatedChat] = await db.update(chats)
+    .set({ metadata })
+    .where(eq(chats.id, chatId))
+    .returning();
+  return updatedChat;
+}

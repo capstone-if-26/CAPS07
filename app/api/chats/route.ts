@@ -1,7 +1,8 @@
-import { processNewChat } from '@/modules/chats/service';
+import { startNewChatStream } from '@/modules/chats/service';
 import { NextRequest } from 'next/server';
 import { auth } from '@/lib/auth';
 import { buildSuccessResponse, buildFailedResponse } from '@/lib/utils/response';
+import { toAgenticEventStreamResponse } from '@/lib/ai/rag';
 
 export async function POST(req: NextRequest) {
   try {
@@ -23,23 +24,24 @@ export async function POST(req: NextRequest) {
     });
     const userId = session?.user?.id || null;
 
-    const namespaceId = process.env.PINECONE_NAMESPACE || "pojk-22-2023-perlindungan-konsumen";
-
     console.log(`Memproses chat baru untuk: ${question}`);
-    const result = await processNewChat(null, question, namespaceId);
+    const result = await startNewChatStream(userId, question);
 
-    return buildSuccessResponse({
-      chatId: result.chat.id,
-      answer: result.ragResponse.answer,
-      matches: result.ragResponse.matches
-    }, "Chat berhasil diproses", 200);
+    return toAgenticEventStreamResponse(result.streamResult, {
+      'x-chat-id': result.chatId,
+    });
 
-  } catch (error: any) {
-    console.error("Error pada /api/chats:", error);
-    return buildFailedResponse(error.message, error, 500);
+  } catch (error: unknown) {
+    let message = 'Terjadi kesalahan internal';
+
+    if (error instanceof Error) {
+      message = error.message;
+    }
+
+    return buildFailedResponse(message, error, 500);
   }
 }
 
 export async function GET() {
-  return buildSuccessResponse({ status: "active" }, "Endpoint POST /api/chats siap melayani kueri RAG", 200);
+  return buildSuccessResponse({ status: "active" }, "Endpoint POST /api/chats siap melayani stream agentic RAG", 200);
 }

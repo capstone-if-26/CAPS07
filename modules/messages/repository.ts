@@ -1,4 +1,4 @@
-import { eq, desc } from 'drizzle-orm';
+import { eq, desc, asc } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { messages, messageFeedbacks } from '@/lib/db/schema';
 import { randomUUID } from 'crypto';
@@ -14,7 +14,11 @@ export async function createMessageRecord(data: CreateMessageParam) {
 }
 
 export async function getMessagesByChatId(chatId: string) {
-  return await db.select().from(messages).where(eq(messages.chatId, chatId));
+  return await db
+    .select()
+    .from(messages)
+    .where(eq(messages.chatId, chatId))
+    .orderBy(asc(messages.createdAt));
 }
 
 export async function getLastMessagesByChatId(chatId: string, messageLimit: number = 10) {

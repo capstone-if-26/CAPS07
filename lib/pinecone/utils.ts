@@ -1,10 +1,14 @@
-import { getPineconeNamespace } from '.';
-import { embedPassages, embedQuery } from '../embeddings/embedder';
-import { withExponentialBackoff } from '../utils/retry';
-import { PineconeRecord, RecordMetadata, ScoredPineconeRecord } from '@pinecone-database/pinecone';
+import { getPineconeNamespace } from ".";
+import { withExponentialBackoff } from "../utils/retry";
+import { pineconeClient } from "./client";
+import {
+  PineconeRecord,
+  RecordMetadata,
+  ScoredPineconeRecord,
+} from "@pinecone-database/pinecone";
 
 // Mengimpor tipe dari implementasi chunker sebelumnya
-import { ChunkData, ChunkMetadata } from '@/types/chunker';
+import { ChunkData, ChunkMetadata } from "@/types/chunker";
 
 /**
  * Filter dan transformasi metadata untuk diindeks oleh Pinecone.
@@ -21,12 +25,12 @@ function extractPineconeMetadata(chunk: ChunkData): RecordMetadata {
     "source_file",
     "section_path",
     "chunk_type",
-    "chunk_index"
+    "chunk_index",
   ];
 
   for (const key of keysToExtract) {
     if (metaSource[key] !== undefined && metaSource[key] !== null) {
-      targetMeta[key] = metaSource[key] as any;
+      targetMeta[key] = metaSource[key] as string | number | boolean | string[];
     }
   }
 
@@ -42,48 +46,72 @@ function extractPineconeMetadata(chunk: ChunkData): RecordMetadata {
 export async function upsertChunksPipeline(
   chunks: ChunkData[],
   namespaceId: string,
-  batchSize: number = 100 // Default batch_size = 100
+  batchSize: number = 100, // Default batch_size = 100
 ): Promise<void> {
-
   if (chunks.length === 0) return;
 
-  console.log(`Memulai proses komputasi vektor untuk ${chunks.length} chunks...`);
+  // 1. Batasi ukuran batch maksimal 100 untuk mematuhi regulasi Inference API
+  const safeBatchSize = Math.min(batchSize, 100);
+  console.log(
+    `Memulai proses pipeline cloud untuk ${chunks.length} chunks (Batch: ${safeBatchSize})...`,
+  );
 
-  const ids = chunks.map(c => c.metadata.chunk_id);
-  const texts = chunks.map(c => c.page_content);
-  const metas = chunks.map(c => extractPineconeMetadata(c));
-
-  // Komputasi vektor
-  const vectors = await embedPassages(texts);
-
-  // Perakitan Payload Pinecone SDK v2
-  const records: PineconeRecord[] = [];
-  for (let i = 0; i < ids.length; i++) {
-    records.push({
-      id: ids[i],
-      values: vectors[i],
-      metadata: metas[i]
-    });
-  }
-
-  console.log(`Komputasi selesai. Memulai unggahan ke Pinecone (Batching per ${batchSize} chunk)...`);
-
-  // Dapatkan koneksi ke namespace spesifik
   const pineconeNs = getPineconeNamespace(namespaceId);
 
-  // Chunk array menjadi batch-batch kecil untuk mencegah request entity too large
-  for (let start = 0; start < records.length; start += batchSize) {
-    const batch = records.slice(start, start + batchSize);
+  // 2. Loop Utama: Siklus komputasi dan unggahan sekarang disatukan per batch
+  for (let start = 0; start < chunks.length; start += safeBatchSize) {
+    const batchChunks = chunks.slice(start, start + safeBatchSize);
 
-    // Gunakan wrapper retry eksponensial
-    await withExponentialBackoff(async () => {
-      await pineconeNs.upsert({ records: batch });
-    });
+    const ids = batchChunks.map(
+      (c) => c.metadata.chunk_id || `chunk_${start}_${Math.random()}`,
+    );
+    const texts = batchChunks.map((c) => c.page_content);
+    const metas = batchChunks.map((c) => extractPineconeMetadata(c));
 
-    console.log(`Berhasil mengunggah batch indeks ${start} hingga ${start + batch.length - 1}`);
+    try {
+      // 3. Komputasi Vektor via Inference API (Dilindungi Exponential Backoff)
+      const embeddingResponse = await withExponentialBackoff(async () => {
+        return await pineconeClient.inference.embed({
+          model: "llama-text-embed-v2",
+          inputs: texts,
+          parameters: {
+            inputType: "passage",
+            truncate: "END",
+          } as any,
+        });
+      });
+
+      // 4. Perakitan Payload Pinecone
+      const records: PineconeRecord[] = [];
+      const vectorsData = embeddingResponse.data;
+
+      for (let i = 0; i < ids.length; i++) {
+        const currentVector = vectorsData[i];
+        const denseValues = (currentVector as { values: number[] }).values;
+
+        records.push({
+          id: ids[i],
+          values: denseValues,
+          metadata: metas[i],
+        });
+      }
+
+      // 5. Upserting ke Database (Dilindungi Exponential Backoff)
+      await withExponentialBackoff(async () => {
+        await pineconeNs.upsert({ records });
+      });
+
+      console.log(
+        `  -> Berhasil mengunggah batch indeks ${start} hingga ${start + records.length - 1}`,
+      );
+    } catch (error) {
+      // Graceful degradation: Tangkap error agar tidak mematikan keseluruhan loop
+      console.error(
+        `[FATAL] Gagal memproses batch indeks ${start} setelah maksimum percobaan:`,
+        error,
+      );
+    }
   }
-
-  console.log(`Selesai! Berhasil mengunggah total ${records.length} vektor ke namespace '${namespaceId}'`);
 }
 
 /**
@@ -91,24 +119,67 @@ export async function upsertChunksPipeline(
  */
 export async function retrieveRelevantChunks(
   question: string,
-  namespaceId: string,
-  topK: number = 6, // Default TOP_K = 6
-  metadataFilter?: Record<string, any>
+  namespaces: string[],
+  namespaceTopK: number = 6,
+  metadataFilter?: Record<string, unknown>,
+  globalTopK: number = 30,
+  minScoreThreshold: number = 0.2,
 ): Promise<ScoredPineconeRecord<RecordMetadata>[]> {
+  console.log(`Mengonversi pertanyaan ke dalam vektor (Cloud Inference)...`);
 
-  // 1. Transformasi pertanyaan menjadi vektor
-  const queryVector = await embedQuery(question);
+  let queryVector: number[];
 
-  // 2. Akses Namespace spesifik
-  const pineconeNs = getPineconeNamespace(namespaceId);
+  try {
+    const queryEmbeddingResponse = await pineconeClient.inference.embed({
+      model: "llama-text-embed-v2",
+      inputs: [question],
+      parameters: {
+        inputType: "query",
+        truncate: "END",
+      } as any,
+    });
 
-  // 3. Eksekusi pencarian vektor
-  const response = await pineconeNs.query({
-    vector: queryVector,
-    topK: topK,
-    includeMetadata: true,
-    filter: metadataFilter,
+    queryVector = (queryEmbeddingResponse.data[0] as { values: number[] })
+      .values;
+  } catch (error) {
+    console.error("Gagal melakukan embedding pada query pencarian:", error);
+    throw error;
+  }
+
+  const promises = namespaces.map(async (ns) => {
+    const pineconeNs = getPineconeNamespace(ns);
+    const response = await pineconeNs.query({
+      vector: queryVector,
+      topK: namespaceTopK,
+      includeMetadata: true,
+      filter: metadataFilter,
+    });
+    return response.matches;
   });
 
-  return response.matches;
+  const results = await Promise.all(promises);
+
+  let allMatches: ScoredPineconeRecord<RecordMetadata>[] = [];
+  for (const matchArray of results) {
+    allMatches = allMatches.concat(matchArray);
+  }
+
+  // Deduplikasi
+  const uniqueMatches = Array.from(
+    new Map(allMatches.map((item) => [item.id, item])).values(),
+  );
+
+  // Filter berdasarkan Threshold Vektor
+  const relevantMatches = uniqueMatches.filter(
+    (m) => (m.score || 0) >= minScoreThreshold,
+  );
+
+  // Urutkan berdasarkan bobot semantik tertinggi
+  relevantMatches.sort((a, b) => (b.score || 0) - (a.score || 0));
+
+  console.log(
+    `Ditemukan ${relevantMatches.length} kecocokan relevan. Skor teratas: ${relevantMatches[0].score}`,
+  );
+
+  return relevantMatches.slice(0, globalTopK);
 }
