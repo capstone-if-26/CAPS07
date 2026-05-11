@@ -41,7 +41,7 @@ export class FAQRegexChunker {
     this.language = config.language || "id";
     this.securityLevel = config.securityLevel || "public";
     this.effectiveDate = config.effectiveDate || null;
-    this.status = config.status || "BERLAKU";
+    this.status = config.documentStatus || "BERLAKU";
 
     const validDocTypes = new Set<DocType>([
       "legal_document",

@@ -26,6 +26,7 @@ export interface ChunkerConfig {
   language?: string;
   securityLevel?: string;
   effectiveDate?: string | null;
+  documentStatus?: string;
   processingStatus?: string;
 }
 

@@ -64,8 +64,8 @@ export async function getAllDocuments() {
   return await db.select().from(documents);
 }
 
-export function getValidDocuments() {
-  return db.select({
+export async function getApplicableDocuments() {
+  return await db.select({
     id: documents.id,
     name: documents.name,
     namespace: documents.namespace,

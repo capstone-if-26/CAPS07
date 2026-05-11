@@ -52,7 +52,7 @@ export class AdaptiveSemanticChunker {
     this.language = config.language || "id";
     this.securityLevel = config.securityLevel || "public";
     this.effectiveDate = config.effectiveDate || null;
-    this.status = config.status || "BERLAKU";
+    this.status = config.documentStatus || "BERLAKU";
     this.fileExtension = path.extname(this.fileName).toLowerCase();
   }
 

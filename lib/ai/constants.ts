@@ -15,3 +15,27 @@ export const ROUTING_SEED = process.env.ROUTING_SEED;
 export const ROUTING_RESPONSE_CONFIDENCE_THRESHOLD = parseFloat(
   process.env.ROUTING_RESPONSE_CONFIDENCE_THRESHOLD || "0.7",
 );
+
+export const RETRIEVE_POLICY_CONTEXT_DESCRIPTION = `
+IMPORTANT:
+For ANY question related to:
+- OJK
+- regulations
+- compliance
+- legal interpretation
+- policy
+- financial protection
+- banking rules
+- document-grounded answers
+- financial fraud
+- education
+
+You MUST call retrieve_policy_context BEFORE answering.
+
+Never answer from prior knowledge for policy questions.
+Always ground answers using retrieved context.
+`;
+
+export const ASK_USER_QUESTION_TOOL_DESCRIPTION = `
+Ask the user a follow-up question with radio options. ALWAYS use this tool instead of normal text for clarification questions that include selectable answers/options.
+`;

@@ -13,7 +13,7 @@ import {
   getLastMessagesByChatId,
   getMessagesByChatId,
 } from "@/modules/messages/repository";
-import { fetchAllAvailableDocuments } from "@/modules/documents/service";
+import { getApplicableDocuments } from "@/modules/documents/repository";
 import {
   classifyIntentAndRelevance,
   generateIntentBasedSummary,
@@ -49,7 +49,7 @@ async function buildAgenticStreamSession({
   longTermMemory: string;
   shortTermMemory: Chats[] | [];
 }) {
-  const documents = await fetchAllAvailableDocuments();
+  const documents = await getApplicableDocuments();
   const availableDocuments = mapKnowledgeDocuments(documents);
   const defaultNamespaces = buildDefaultNamespaces(availableDocuments);
 
