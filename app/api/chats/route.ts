@@ -1,6 +1,6 @@
 import { startNewChatStream } from '@/modules/chats/service';
 import { NextRequest } from 'next/server';
-import { auth } from '@/lib/auth';
+import { auth } from '@/modules/auth/service';
 import { buildSuccessResponse, buildFailedResponse } from '@/lib/utils/response';
 import { toAgenticEventStreamResponse } from '@/lib/ai/rag';
 

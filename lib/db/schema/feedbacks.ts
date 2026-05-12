@@ -9,5 +9,5 @@ export const feedbacks = pgTable('feedbacks', {
 
   createdAt: timestamp('created_at').defaultNow().notNull(),
 
-  userId: uuid('user_id').references(() => users.id, { onDelete: 'set null' }),
+  userId: text('user_id').references(() => users.id, { onDelete: 'set null' }),
 });
