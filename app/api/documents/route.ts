@@ -21,9 +21,14 @@ const VALID_DOC_TYPES: Set<string> = new Set([
   "attachment"
 ]);
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
-    const documents = await fetchAllAvailableDocuments();
+    const searchParams = req.nextUrl.searchParams;
+    const search = searchParams.get("search") || "";
+    const page = parseInt(searchParams.get("page") || "1", 10);
+    const limit = parseInt(searchParams.get("limit") || "10", 10);
+
+    const documents = await fetchAllAvailableDocuments(search, page, limit);
     return buildSuccessResponse(documents, "Berhasil mengambil daftar dokumen");
   } catch (error: unknown) {
     const message =

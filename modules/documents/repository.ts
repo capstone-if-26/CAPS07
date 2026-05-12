@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import { eq } from "drizzle-orm";
+import { eq, count, ilike, sql } from "drizzle-orm";
 import { documents } from "@/lib/db/schema";
 import { CreateDocumentParam } from "./types";
 
@@ -60,8 +60,39 @@ export async function updateDocumentStatus(
   return updated;
 }
 
-export async function getAllDocuments() {
-  return await db.select().from(documents);
+export async function getAllDocuments(params: { search?: string; limit: number; offset: number }) {
+  const { search, limit, offset } = params;
+  
+  let query = db.select({
+    id: documents.id,
+    name: documents.name,
+    namespace: documents.namespace,
+    documentType: documents.documentType,
+    totalChunks: documents.totalChunks,
+    fileName: documents.fileName,
+    statusDocument: documents.statusDocument,
+    version: documents.version,
+    effectiveDate: documents.effectiveDate,
+    processingStatus: documents.processingStatus,
+    createdAt: documents.createdAt,
+  }).from(documents).$dynamic();
+
+  let countQuery = db.select({ value: count() }).from(documents).$dynamic();
+
+  if (search) {
+    const searchPattern = `%${search}%`;
+    query = query.where(ilike(documents.name, searchPattern));
+    countQuery = countQuery.where(ilike(documents.name, searchPattern));
+  }
+
+  query = query.limit(limit).offset(offset).orderBy(sql`${documents.createdAt} DESC`);
+
+  const [data, [{ value: totalCount }]] = await Promise.all([
+    query,
+    countQuery
+  ]);
+
+  return { data, totalCount };
 }
 
 export async function getApplicableDocuments() {

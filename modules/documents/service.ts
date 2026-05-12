@@ -16,10 +16,24 @@ import * as crypto from "crypto";
 import { UploadDocumentInput, UploadDocumentResult } from "./types";
 import { DocumentUploadError, DocumentOperationError } from "./error";
 
-export async function fetchAllAvailableDocuments() {
+export async function fetchAllAvailableDocuments(
+  search: string = "",
+  page: number = 1,
+  limit: number = 10
+) {
   try {
-    const documents = await getAllDocuments();
-    return documents;
+    const offset = (page - 1) * limit;
+    const result = await getAllDocuments({ search, limit, offset });
+    
+    return {
+      documents: result.data,
+      metadata: {
+        total: result.totalCount,
+        page,
+        limit,
+        totalPages: Math.ceil(result.totalCount / limit)
+      }
+    };
   } catch (error) {
     console.error("Gagal mengambil semua dokumen:", error);
     throw error;
