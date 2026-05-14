@@ -33,15 +33,15 @@ type IntentRequirementsMap = Record<OjkIntent, string[]>;
 const OFF_TOPIC_TEMPLATE = 'Maaf, saya hanya dapat membantu pertanyaan yang relevan dengan OJK, layanan keuangan, perlindungan konsumen, perbankan, investasi, pinjol, SLIK, dan penipuan keuangan. Silakan ajukan pertanyaan yang terkait topik tersebut.';
 
 const SUMMARY_HEADING_TO_INTENT: Record<string, OjkIntent> = {
-  'hak konsumen': 'Hak Saya sebagai Konsumen',
-  'investasi dan kripto aman': 'Panduan Investasi & Kripto Aman',
-  'literasi keuangan': 'Literasi & Tips Keuangan',
-  'legalitas pinjol': 'Cek Legalitas Pinjol/Investasi',
-  'modus penipuan': 'Kenali Modus Penipuan',
-  'produk bank': 'Panduan Produk Bank',
-  'penipuan (iasc)': 'IASC — Anti-Scam Centre',
-  'pengaduan konsumen': 'Lapor Penipuan (OJK / IASC)',
-  'cek slik': 'Cek SLIK / Riwayat Kredit',
+  'edukasi tentang hak dan pelindungan konsumen di sektor jasa keuangan, termasuk jalur pengaduan melalui APPK/Kontak OJK 157': 'Hak Saya sebagai Konsumen',
+  'panduan agar masyarakat terhindar dari investasi ilegal dan aset kripto yang tidak berizin, serta belajar mengenali entitas yang resmi diawasi OJK untuk aset keuangan digital dan kripto.': 'Panduan Investasi & Kripto Aman',
+  'materi literasi keuangan umum agar masyarakat lebih paham produk, risiko, dan pengelolaan keuangan.': 'Literasi & Tips Keuangan',
+  'cek apakah pinjaman online/fintech lending berizin atau ilegal, biasanya dengan merujuk ke daftar penyelenggara resmi OJK dan peringatan terhadap pinjol ilegal.': 'Cek Legalitas Pinjol/Investasi',
+  'edukasi tentang pola-pola scam yang sering dipakai pelaku, termasuk penipuan digital, impersonation scam, dan modus investasi/kripto ilegal.': 'Kenali Modus Penipuan',
+  'informasi dasar tentang produk perbankan seperti giro, tabungan, deposito, serta kredit/pembiayaan.': 'Panduan Produk Bank',
+  'kanal khusus untuk laporan penipuan keuangan melalui Indonesia Anti-Scam Centre (IASC).': 'IASC — Anti-Scam Centre',
+  'layanan pengaduan konsumen OJK melalui APPK/Kontak 157, termasuk telepon, WhatsApp, email, dan portal online; untuk kasus scam keuangan, laporan juga bisa diarahkan ke IASC.': 'Lapor Penipuan (OJK / IASC)',
+  'pengecekan riwayat kredit/debitur atau iDeb melalui SLIK, yang digunakan lembaga jasa keuangan untuk menilai kelayakan kredit/pembiayaan.': 'Cek SLIK / Riwayat Kredit',
 };
 
 let cachedRequirements: IntentRequirementsMap | null = null;

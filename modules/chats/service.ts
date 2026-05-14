@@ -3,10 +3,13 @@ import {
   generateConversationSummary,
   generateQuiz,
 } from "@/lib/ai/rag";
+import { checkIfResolved } from "@/lib/ai/utils";
 import {
   createChatRecord,
   getChatById,
   updateChatSummary,
+  updateChatIntent,
+  updateChatResolution,
 } from "@/modules/chats/repository";
 import {
   createMessageRecord,
@@ -80,6 +83,18 @@ async function buildAgenticStreamSession({
         });
 
         await updateChatSummary(chatId, summary);
+
+        if (checkIfResolved(finalAnswer)) {
+          await updateChatResolution(chatId, true);
+        }
+
+        classifyIntentAndRelevance(question, shortTermMemory)
+          .then(async (classification) => {
+            await updateChatIntent(chatId, classification.intent);
+          })
+          .catch((err) => {
+            console.error("Failed to classify intent real-time:", err);
+          });
       } catch (error) {
         console.error("Failed to persist assistant response:", error);
       }
@@ -184,6 +199,7 @@ export async function generateChatIntentSummary(
       lastUserQuestion || classificationText,
       classification,
     );
+    await updateChatIntent(chatId, intent);
   }
 
   const summary = await generateIntentBasedSummary(intent, conversation);

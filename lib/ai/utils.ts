@@ -258,3 +258,16 @@ export function getSourceEvents(output: unknown): AgenticRagStreamEvent[] {
     }];
   });
 }
+
+// ─── Resolution helper ──────────────────────────────────────────────
+
+export function checkIfResolved(answer: string): boolean {
+  if (!answer) return false;
+  
+  // Deteksi tautan HTTP/HTTPS, WA (wa.me atau format nomor tertentu), dan Email
+  const urlRegex = /https?:\/\/[^\s]+/i;
+  const waRegex = /wa\.me\/|081-157-157-157/i;
+  const emailRegex = /mailto:|[\w.-]+@[\w.-]+\.\w+/i;
+  
+  return urlRegex.test(answer) || waRegex.test(answer) || emailRegex.test(answer);
+}

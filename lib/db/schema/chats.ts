@@ -1,4 +1,4 @@
-import { pgTable, varchar, timestamp, text, uuid } from 'drizzle-orm/pg-core';
+import { pgTable, varchar, timestamp, text, uuid, boolean } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 import { users } from './users';
 import { messages } from './messages';
@@ -11,10 +11,15 @@ export const chats = pgTable('chats', {
   // Sesuai PDM menggunakan text, walau praktik terbaiknya adalah timestamp
   lastMessageAt: text('last_message_at'),
 
-  // Menggunakan text untuk menyimpan JSON string (atau jsonb() jika Anda butuh query spesifik dalam JSON)
+  // Menyimpan metadata dan ringkasan chat
   metadata: text('metadata'),
   summary: text('summary').default('').notNull(),
   summaryUpdated: timestamp('summary_updated'),
+
+  // Tracking Dashboard & Analitik
+  intent: text('intent').default('Lainnya').notNull(),
+  isResolved: boolean('is_resolved').default(false).notNull(),
+  resolvedAt: timestamp('resolved_at'),
 
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().$onUpdate(() => new Date()).notNull(),

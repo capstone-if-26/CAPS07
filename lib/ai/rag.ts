@@ -75,8 +75,10 @@ export function createAgenticRagStream(params: AgenticRagStreamParams) {
     model,
     system: systemPrompt,
     prompt: userPrompt,
-    temperature: 0.2,
+    temperature: 0.5,
     topP: 0.9,
+    frequencyPenalty: 0.3,
+    presencePenalty: 0.2,
     stopWhen: forceQuestionTool ? stepCountIs(1) : stepCountIs(4),
     toolChoice: forceQuestionTool
       ? { type: "tool", toolName: "ask_user_question" }

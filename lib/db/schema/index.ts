@@ -3,5 +3,4 @@ export * from './auth';
 export * from './chats';
 export * from './messages';
 export * from './message_feedbacks';
-export * from './feedbacks';
 export * from './documents';
