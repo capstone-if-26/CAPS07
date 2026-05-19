@@ -5,7 +5,7 @@ import * as schema from "@/lib/db/schema";
 import { Resend } from "resend";
 import { generateAuthEmailHTML } from "./constants";
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+const getResend = () => new Resend(process.env.RESEND_API_KEY);
 
 export const auth = betterAuth({
     database: drizzleAdapter(db, {
@@ -21,7 +21,7 @@ export const auth = betterAuth({
     emailAndPassword: {
         enabled: true,
         sendResetPassword: async ({ user, url, token }, request) => {
-            await resend.emails.send({
+            await getResend().emails.send({
                 from: "ojkchatbot@gmail.com",
                 to: user.email,
                 subject: "Instruksi Reset Password",
@@ -31,7 +31,7 @@ export const auth = betterAuth({
     },
     emailVerification: {
         sendVerificationEmail: async ({ user, url, token }, request) => {
-            await resend.emails.send({
+            await getResend().emails.send({
                 from: "ojkchatbot@gmail.com",
                 to: user.email,
                 subject: "Verifikasi Alamat Email",
