@@ -2,9 +2,9 @@ import { NextRequest } from "next/server";
 import { buildFailedResponse, buildSuccessResponse } from "@/lib/utils/response";
 import { upsertMessageFeedback, getMessageById } from "@/modules/messages/repository";
 
-export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const { id } = params;
+    const { id } = await params;
     const body = await req.json();
 
     if (!['like', 'dislike', 'none'].includes(body.feedback)) {
