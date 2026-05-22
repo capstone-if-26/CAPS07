@@ -320,3 +320,20 @@ export async function continueChat(
   });
   return { status: true, data: { answer } };
 }
+
+// Feedback untuk pesan bot
+export type FeedbackValue = "like" | "dislike" | "none"
+
+export async function submitFeedback(
+  messageId: string,
+  feedback: FeedbackValue
+): Promise<void> {
+  const res = await fetch(`${BASE_URL}/api/messages/${messageId}/feedback`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ feedback }),
+  })
+  if (!res.ok) {
+    throw new Error(`Gagal submit feedback: ${res.status}`)
+  }
+}

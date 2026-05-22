@@ -29,6 +29,7 @@ const QUICK_MENU = [
   "Literasi & Tips Keuangan Harian",
   "Kenali Modus Penipuan Keuangan",
   "Cara Lapor / Pengaduan ke OJK",
+  "IASC - Indonesia Anti-Scam Centre",
 ]
 
 function Tooltip({
@@ -167,6 +168,21 @@ function RiwayatItem({
   )
 }
 
+const RIWAYAT_KEY = "ojk_riwayat_list"
+
+function saveRiwayat(list: ChatHistory[]) {
+  localStorage.setItem(RIWAYAT_KEY, JSON.stringify(list))
+}
+
+function loadRiwayat(): ChatHistory[] {
+  try {
+    const raw = localStorage.getItem(RIWAYAT_KEY)
+    return raw ? JSON.parse(raw) : []
+  } catch {
+    return []
+  }
+}
+
 type ChatbotWidgetProps = {
   onClose: () => void
 }
@@ -181,11 +197,12 @@ export default function ChatbotWidget({ onClose }: ChatbotWidgetProps) {
 
   const [showDotMenu, setShowDotMenu] = useState(false)
   const [showRiwayat, setShowRiwayat] = useState(false)
-  const [riwayatList, setRiwayatList] = useState<ChatHistory[]>([])
+  const [riwayatList, setRiwayatList] = useState<ChatHistory[]>(() => loadRiwayat())
   const [activeItemMenu, setActiveItemMenu] = useState<string | null>(null)
   const [copySuccess, setCopySuccess] = useState(false)
   const [copyLoading, setCopyLoading] = useState(false)
   const [showQuiz, setShowQuiz] = useState(false)
+  const [isLoadingHistory, setIsLoadingHistory] = useState(true)
 
   const [tooltipClose, setTooltipClose] = useState(false)
   const [tooltipDot, setTooltipDot] = useState(false)
@@ -199,10 +216,35 @@ export default function ChatbotWidget({ onClose }: ChatbotWidgetProps) {
 
   // Selalu mulai chat baru saat pertama load
   useEffect(() => {
-    clearChatId()
-    setChatId(null)
-    setMessages([])
-  }, [])
+  const savedId = getSavedChatId()
+  if (savedId) {
+      setChatId(savedId)
+      getChatHistory(savedId).then((res) => {
+        if (res.status && res.data.messages.length > 0) {
+          setMessages(res.data.messages.map((m: Message) => ({
+            text: m.content,
+            sender: m.senderType === "user" ? "user" : "bot",
+            messageId: m.id,
+          })))
+        const firstMsg = res.data.messages.find((m: Message) => m.senderType === "user")
+        if (firstMsg) {
+          setRiwayatList((prev) => {
+            const exists = prev.find(r => r.id === savedId)
+            if (exists) return prev
+            return [{
+            id: savedId,
+            title: firstMsg.content.length > 40
+              ? firstMsg.content.substring(0, 40) + "..."
+              : firstMsg.content,
+          }, ...prev]
+        })
+      }
+      }
+    }).catch(() => {}).finally(() => setIsLoadingHistory(false))
+  } else {
+    setIsLoadingHistory(false)
+  }
+}, [])
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" })
@@ -225,6 +267,10 @@ export default function ChatbotWidget({ onClose }: ChatbotWidgetProps) {
     document.addEventListener("mousedown", fn)
     return () => document.removeEventListener("mousedown", fn)
   }, [])
+
+  useEffect(() => {
+  saveRiwayat(riwayatList)
+  }, [riwayatList])
 
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setInput(e.target.value)
@@ -343,8 +389,33 @@ export default function ChatbotWidget({ onClose }: ChatbotWidgetProps) {
         return updated
       })
     } finally {
-      setIsLoading(false)
-    }
+  setIsLoading(false)
+
+  // Fetch history setelah stream selesai untuk dapat messageId pesan bot
+  const currentChatId = getSavedChatId()
+  if (currentChatId) {
+    getChatHistory(currentChatId).then((res) => {
+      if (res.status && res.data.messages.length > 0) {
+        setMessages((prev) => {
+          const historyMap: Record<string, string> = {}
+          res.data.messages.forEach((m: Message) => {
+            if (m.senderType === "assistant" && m.id && m.content) {
+              historyMap[m.content.substring(0, 50)] = m.id
+            }
+          })
+          return prev.map((msg) => {
+            if (msg.sender === "bot" && msg.text && !msg.messageId) {
+              const key = msg.text.substring(0, 50)
+              const foundId = historyMap[key]
+              if (foundId) return { ...msg, messageId: foundId }
+            }
+            return msg
+          })
+        })
+      }
+    }).catch(() => {})
+  }
+}
   }
 
   const handleSend = async (customText?: string) => {
@@ -386,7 +457,9 @@ export default function ChatbotWidget({ onClose }: ChatbotWidgetProps) {
     getChatHistory(id).then((res) => {
       if (res.status && res.data.messages.length > 0)
         setMessages(res.data.messages.map((m: Message) => ({
-          text: m.content, sender: m.senderType === "user" ? "user" : "bot",
+          text: m.content,
+          sender: m.senderType === "user" ? "user" : "bot",
+          messageId: m.id,
         })))
     }).catch(() => {})
     setShowRiwayat(false)
@@ -426,8 +499,16 @@ export default function ChatbotWidget({ onClose }: ChatbotWidgetProps) {
   return (
     <>
       <style>{`
-        .chat-scroll::-webkit-scrollbar { display: none; }
-        .chat-scroll { -ms-overflow-style: none; scrollbar-width: none; }
+        .custom-scroll::-webkit-scrollbar { width: 3px; }
+        .custom-scroll::-webkit-scrollbar-track { background: transparent; border-radius: 999px; }
+        .custom-scroll::-webkit-scrollbar-thumb {
+          background: linear-gradient(180deg, #c21f26 0%, #a11212 50%, #7a0000 100%);
+          border-radius: 999px;
+          min-height: 24px;
+        }
+        .custom-scroll::-webkit-scrollbar-thumb:hover { background: #c21f26; }
+        .custom-scroll { scrollbar-width: thin; scrollbar-color: #a11212 transparent; }
+
         @keyframes pulse-dot {
           0%, 80%, 100% { opacity: 0.2; transform: scale(0.8); }
           40% { opacity: 1; transform: scale(1); }
@@ -478,9 +559,9 @@ export default function ChatbotWidget({ onClose }: ChatbotWidgetProps) {
                   w-[90vw] max-w-[380px]
                   h-full max-h-none min-h-0 
     
-                  sm:fixed sm:right-18 sm:bottom-28
-                  sm:w-[270px] sm:max-w-none sm:min-w-0
-                  sm:h-[65vh] sm:max-h-none sm:min-h-0 
+                  sm:fixed sm:right-18 sm:bottom-23
+                  sm:w-[440px] sm:max-w-none sm:min-w-0
+                  sm:h-[70vh] sm:max-h-none sm:min-h-0 
     
                   rounded-2xl flex flex-col
                   pointer-events-auto
@@ -570,10 +651,17 @@ export default function ChatbotWidget({ onClose }: ChatbotWidgetProps) {
 
           {/* Area chat + input */}
           <div
-            className="flex-1 flex flex-col min-h-0 px-4 pb-4 pt-2 transition-all duration-200 relative"
+            className="flex-1 flex flex-col min-h-0 px-4 pb-0.2 pt-2 transition-all duration-200 relative"
             style={{ filter: showRiwayat ? "blur(1.5px)" : "none" }}
           >
-            <div ref={chatContainerRef} className="chat-scroll flex-1 overflow-y-auto space-y-3 flex flex-col pr-1">
+            <div ref={chatContainerRef} className="custom-scroll flex-1 overflow-y-auto space-y-3 flex flex-col pr-1">
+              {isLoadingHistory ? (
+                <div className="flex-1 flex items-center justify-center">
+                  <div className="w-5 h-5 border-2 border-[#a11212] border-t-transparent rounded-full animate-spin" />
+                </div>
+              ) : (
+                <>
+  
               {/* Greeting */}
               <div className="flex items-center gap-1.5 text-[11px] font-semibold text-[#a11212] flex-shrink-0">
                 <Image src="/ikon-chtbot2.png" alt="bot" width={16} height={16} className="rounded-full border border-[#a11212]" />
@@ -591,7 +679,7 @@ export default function ChatbotWidget({ onClose }: ChatbotWidgetProps) {
                 <div className="grid grid-cols-2 gap-1 mx-auto max-w-[85%] font-semibold flex-shrink-0">
                   {QUICK_MENU.map((label, i) => (
                     <button key={i} onClick={() => handleSend(label)} disabled={isLoading}
-                      className="bg-[#a11212] text-white text-[9px] px-1.5 py-[3px] rounded w-full hover:bg-[#8a0f0f] transition-colors disabled:opacity-50">
+                      className="bg-[#a11212] text-white text-[9px] px-2 py-2px rounded-md w-full min-h-[30px] flex items-center justify-center text-center leading-tight hover:bg-[#8a0f0f] transition-colors disabled:opacity-50">
                       {label}
                     </button>
                   ))}
@@ -620,7 +708,9 @@ export default function ChatbotWidget({ onClose }: ChatbotWidgetProps) {
                 )}
                 <div ref={chatEndRef} />
               </div>
-            </div>
+            </>
+          )}
+        </div>
 
             {/* Quiz */}
             {showQuiz && chatId && (
@@ -639,7 +729,7 @@ export default function ChatbotWidget({ onClose }: ChatbotWidgetProps) {
                     if (textareaRef.current) textareaRef.current.style.height = "auto"
                   }
                 }}
-                placeholder="Apa yang bisa saya bantu?..."
+                placeholder="Selamat Datang, Apa yang bisa saya bantu?..."
                 disabled={isLoading}
                 rows={1}
                 className="flex-1 border border-[#a11212] rounded px-1.5 py-1 min-h-[26px] text-[10.5px] text-black bg-white placeholder-[#a11212]/50 outline-none disabled:opacity-60 resize-none overflow-hidden leading-tight"
@@ -689,6 +779,11 @@ export default function ChatbotWidget({ onClose }: ChatbotWidgetProps) {
               </div>
             </div>
           </div>
+          {/* Catatan */}
+          <p className="text-[8.5px] text-gray-400 text-center py-1.5 flex-shrink-0 flex items-center justify-center gap-1">
+            <Image src="/ikon-warning.png" alt="warning" width={10} height={10} />
+            Respons AI dapat mengandung kekeliruan. Verifikasi info penting melalui layanan resmi OJK.
+          </p>
 
         </div>
       </div>
