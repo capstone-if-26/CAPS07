@@ -198,10 +198,44 @@ function DetailModal({ doc: initialDoc, onClose }: { doc: Dokumen; onClose: () =
     ["Deskripsi", doc.description ?? "—"],
     ["Tipe Dokumen", doc.documentType],
     ["Total Chunks", doc.totalChunks?.toLocaleString("id-ID") ?? "—"],
-    ["Status Dokumen", <span style={{ background: statusDoc.bg, color: statusDoc.color, padding: "2px 10px", borderRadius: 20, fontSize: 11.5, fontWeight: 600 }}>{statusDoc.label}</span>],
+
+    [
+      "Status Dokumen",
+      <span
+        key="status-doc"
+        style={{
+          background: statusDoc.bg,
+          color: statusDoc.color,
+          padding: "2px 10px",
+          borderRadius: 20,
+          fontSize: 11.5,
+          fontWeight: 600,
+        }}
+      >
+        {statusDoc.label}
+      </span>,
+    ],
+
     ["Version", doc.version ?? "—"],
     ["Tanggal Berlaku", formatDate(doc.effectiveDate)],
-    ["Status Pemrosesan", <span style={{ background: statusProses.bg, color: statusProses.color, padding: "2px 10px", borderRadius: 20, fontSize: 11.5, fontWeight: 600 }}>{statusProses.label}</span>],
+
+    [
+      "Status Pemrosesan",
+      <span
+        key="status-proses"
+        style={{
+          background: statusProses.bg,
+          color: statusProses.color,
+          padding: "2px 10px",
+          borderRadius: 20,
+          fontSize: 11.5,
+          fontWeight: 600,
+        }}
+      >
+        {statusProses.label}
+      </span>,
+    ],
+
     ["Tanggal Diunggah", formatDate(doc.createdAt)],
   ]
 
