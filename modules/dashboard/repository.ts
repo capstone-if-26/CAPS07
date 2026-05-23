@@ -3,17 +3,15 @@ import { chats, messages } from "@/lib/db/schema";
 import { messageFeedbacks } from "@/lib/db/schema/message_feedbacks";
 import { and, eq, sql } from "drizzle-orm";
 
-export type DashboardStatsParams = {
-  year?: string;
-  month?: string;
-  groupBy?: "month" | "year";
-};
-
 export type DashboardOverviewParams = {
   days?: string; // "7" or "30", default "30"
   year?: string;
   month?: string;
 };
+
+// ---------------------------------------------------------------------------
+// Shared date condition builders
+// ---------------------------------------------------------------------------
 
 function buildChatDateCondition(params: DashboardOverviewParams) {
   const { days, year, month } = params;
@@ -48,6 +46,19 @@ function buildFeedbackDateCondition(params: DashboardOverviewParams) {
 
   return conditions.length > 0 ? and(...conditions) : undefined;
 }
+
+/** year-only → monthly buckets; everything else (days / year+month) → daily */
+function resolvePeriodGranularity(params: DashboardOverviewParams) {
+  const byMonth = !!params.year && !params.month;
+  return {
+    truncUnit: byMonth ? "month" : "day",
+    dateFormat: byMonth ? "YYYY-MM" : "YYYY-MM-DD",
+  } as const;
+}
+
+// ---------------------------------------------------------------------------
+// Overview — aggregate totals
+// ---------------------------------------------------------------------------
 
 export async function getDashboardOverviewSummary(params: DashboardOverviewParams) {
   const where = buildChatDateCondition(params);
@@ -94,22 +105,14 @@ export async function getDashboardOverviewLikeRate(params: DashboardOverviewPara
   return result[0];
 }
 
-export async function getDashboardCompletionRate(params: DashboardStatsParams) {
-  const { year, month, groupBy = "month" } = params;
+// ---------------------------------------------------------------------------
+// Overview — trend (time-series for line charts)
+// ---------------------------------------------------------------------------
 
-  // Use to_char to format the truncated date nicely as string
-  const dateFormat = groupBy === "year" ? "YYYY" : "YYYY-MM";
-  const periodChunk = sql<string>`to_char(date_trunc(${sql.raw(`'${groupBy}'`)}, ${chats.createdAt}), ${sql.raw(`'${dateFormat}'`)})`;
-
-  const conditions = [];
-  if (year) {
-    conditions.push(sql`extract(year from ${chats.createdAt}) = ${parseInt(year)}`);
-  }
-  if (month) {
-    conditions.push(sql`extract(month from ${chats.createdAt}) = ${parseInt(month)}`);
-  }
-
-  const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+export async function getOverviewTrendChats(params: DashboardOverviewParams) {
+  const where = buildChatDateCondition(params);
+  const { truncUnit, dateFormat } = resolvePeriodGranularity(params);
+  const periodChunk = sql<string>`to_char(date_trunc(${sql.raw(`'${truncUnit}'`)}, ${chats.createdAt}), ${sql.raw(`'${dateFormat}'`)})`;
 
   const result = await db
     .select({
@@ -118,74 +121,35 @@ export async function getDashboardCompletionRate(params: DashboardStatsParams) {
       resolvedChats: sql<number>`sum(case when ${chats.isResolved} = true then 1 else 0 end)::int`,
     })
     .from(chats)
-    .where(whereClause)
+    .where(where)
     .groupBy(periodChunk)
     .orderBy(periodChunk);
 
   return result;
 }
 
-export async function getDashboardTopIntents(params: DashboardStatsParams) {
-  const { year, month, groupBy = "month" } = params;
-
-  const dateFormat = groupBy === "year" ? "YYYY" : "YYYY-MM";
-  const periodChunk = sql<string>`to_char(date_trunc(${sql.raw(`'${groupBy}'`)}, ${chats.createdAt}), ${sql.raw(`'${dateFormat}'`)})`;
-
-  const conditions = [];
-  if (year) {
-    conditions.push(sql`extract(year from ${chats.createdAt}) = ${parseInt(year)}`);
-  }
-  if (month) {
-    conditions.push(sql`extract(month from ${chats.createdAt}) = ${parseInt(month)}`);
-  }
-
-  const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
-
-  const result = await db
-    .select({
-      period: periodChunk,
-      intent: chats.intent,
-      count: sql<number>`count(${chats.id})::int`,
-    })
-    .from(chats)
-    .where(whereClause)
-    .groupBy(periodChunk, chats.intent)
-    .orderBy(periodChunk, sql`count(${chats.id}) desc`);
-
-  return result;
-}
-
-export async function getDashboardFeedbackStats(params: DashboardStatsParams) {
-  const { year, month, groupBy = "month" } = params;
-
-  const dateFormat = groupBy === "year" ? "YYYY" : "YYYY-MM";
-  const periodChunk = sql<string>`to_char(date_trunc(${sql.raw(`'${groupBy}'`)}, ${messageFeedbacks.createdAt}), ${sql.raw(`'${dateFormat}'`)})`;
-
-  const conditions = [];
-  if (year) {
-    conditions.push(sql`extract(year from ${messageFeedbacks.createdAt}) = ${parseInt(year)}`);
-  }
-  if (month) {
-    conditions.push(sql`extract(month from ${messageFeedbacks.createdAt}) = ${parseInt(month)}`);
-  }
-
-  const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+export async function getOverviewTrendFeedbacks(params: DashboardOverviewParams) {
+  const where = buildFeedbackDateCondition(params);
+  const { truncUnit, dateFormat } = resolvePeriodGranularity(params);
+  const periodChunk = sql<string>`to_char(date_trunc(${sql.raw(`'${truncUnit}'`)}, ${messageFeedbacks.createdAt}), ${sql.raw(`'${dateFormat}'`)})`;
 
   const result = await db
     .select({
       period: periodChunk,
       likes: sql<number>`sum(case when ${messageFeedbacks.feedback} = 'like' then 1 else 0 end)::int`,
-      dislikes: sql<number>`sum(case when ${messageFeedbacks.feedback} = 'dislike' then 1 else 0 end)::int`,
-      none: sql<number>`sum(case when ${messageFeedbacks.feedback} = 'none' then 1 else 0 end)::int`,
       total: sql<number>`count(${messageFeedbacks.id})::int`,
     })
     .from(messageFeedbacks)
-    .where(whereClause)
+    .where(where)
     .groupBy(periodChunk)
     .orderBy(periodChunk);
 
   return result;
 }
+
+// ---------------------------------------------------------------------------
+// Session-intent
+// ---------------------------------------------------------------------------
 
 export async function getSessionAnalysisStats(params: DashboardOverviewParams) {
   const where = buildChatDateCondition(params);
@@ -233,6 +197,10 @@ export async function getUserMessageContents(params: DashboardOverviewParams): P
     .filter((c): c is string => typeof c === "string" && c.length > 0);
 }
 
+// ---------------------------------------------------------------------------
+// Feedback / CSAT
+// ---------------------------------------------------------------------------
+
 export async function getFeedbackOverall(params: DashboardOverviewParams) {
   const where = buildFeedbackDateCondition(params);
 
@@ -267,13 +235,8 @@ export async function getFeedbackByIntent(params: DashboardOverviewParams) {
 }
 
 export async function getFeedbackTrend(params: DashboardOverviewParams) {
-  const { year, month } = params;
   const where = buildFeedbackDateCondition(params);
-
-  // year-only → monthly buckets; everything else → daily buckets
-  const byMonth = !!year && !month;
-  const truncUnit = byMonth ? "month" : "day";
-  const dateFormat = byMonth ? "YYYY-MM" : "YYYY-MM-DD";
+  const { truncUnit, dateFormat } = resolvePeriodGranularity(params);
   const periodChunk = sql<string>`to_char(date_trunc(${sql.raw(`'${truncUnit}'`)}, ${messageFeedbacks.createdAt}), ${sql.raw(`'${dateFormat}'`)})`;
 
   const result = await db

@@ -8,108 +8,49 @@ Dokumen ini menjelaskan seluruh endpoint API pada modul dashboard analitik OJK C
 
 | Endpoint | Deskripsi |
 | :--- | :--- |
-| `GET /api/dashboard/stats` | Statistik historis per periode (time-series) |
-| `GET /api/dashboard/overview` | Ringkasan KPI dalam rentang waktu tertentu |
+| `GET /api/dashboard/overview` | Ringkasan KPI + tren waktu |
 | `GET /api/dashboard/session-intent` | Analisis sesi, distribusi intent, dan word cloud |
 | `GET /api/dashboard/feedback` | CSAT keseluruhan, per intent, dan tren waktu |
 
 ---
 
-## Filter Waktu
-
-Terdapat dua skema filter yang digunakan oleh endpoint-endpoint ini.
-
-### Skema A — digunakan oleh `/stats`
-
-| Parameter | Tipe | Deskripsi |
-| :--- | :--- | :--- |
-| `year` | `string` | Filter tahun tertentu, mis. `2026` |
-| `month` | `string` | Filter bulan tertentu (1–12), mis. `5` |
-| `groupBy` | `string` | Granularitas pengelompokan: `month` (default) atau `year` |
-
-### Skema B — digunakan oleh `/overview`, `/session-intent`, `/feedback`
+## Filter Waktu (berlaku untuk semua endpoint)
 
 | Parameter | Tipe | Deskripsi | Default |
 | :--- | :--- | :--- | :--- |
 | `days` | `string` | Rentang hari terakhir: `7` atau `30` | `30` |
 | `year` | `string` | Filter tahun tertentu, mis. `2026` | — |
-| `month` | `string` | Filter bulan tertentu (dipakai bersama `year`) | — |
+| `month` | `string` | Filter bulan tertentu (1–12), dipakai bersama `year` | — |
 
-**Aturan prioritas Skema B:**
-- Jika `year` diberikan, parameter `days` diabaikan.
-- Jika hanya `year` diberikan (tanpa `month`), data difilter untuk seluruh tahun tersebut.
-- Jika `year` dan `month` diberikan, data difilter untuk bulan tersebut.
-- Jika tidak ada parameter yang diberikan, default ke **30 hari terakhir**.
+**Aturan prioritas:**
 
----
-
-## 1. GET `/api/dashboard/stats`
-
-Mengambil data analitik dalam bentuk time-series yang diagregasi per periode (bulan atau tahun). Digunakan untuk menampilkan grafik historis *completion rate*, distribusi intent, dan statistik feedback.
-
-### Query Parameters
-
-Menggunakan **Skema A**.
-
-### Success Response — `200 OK`
-
-```json
-{
-  "status": true,
-  "message": "Berhasil mengambil statistik chat",
-  "data": {
-    "completionRate": [
-      {
-        "period": "2026-05",
-        "totalChats": 150,
-        "resolvedChats": 105,
-        "rate": 70.00
-      }
-    ],
-    "topIntents": [
-      {
-        "period": "2026-05",
-        "intent": "Lapor Penipuan (OJK / IASC)",
-        "count": 80
-      },
-      {
-        "period": "2026-05",
-        "intent": "Cek Legalitas Pinjol/Investasi",
-        "count": 70
-      }
-    ],
-    "feedbackStats": [
-      {
-        "period": "2026-05",
-        "likes": 50,
-        "dislikes": 10,
-        "none": 90,
-        "total": 150
-      }
-    ]
-  }
-}
-```
-
-### Keterangan Field
-
-| Field | Deskripsi |
+| Kombinasi parameter | Rentang data yang digunakan |
 | :--- | :--- |
-| `completionRate[].period` | Label periode, format `YYYY-MM` atau `YYYY` tergantung `groupBy` |
-| `completionRate[].rate` | Persentase chat yang terselesaikan (`resolvedChats / totalChats × 100`) |
-| `topIntents[].intent` | Nama intent OJK |
-| `topIntents[].count` | Jumlah chat dengan intent tersebut pada periode tersebut |
-| `feedbackStats[].none` | Jumlah feedback dengan nilai default (belum diberi rating) |
+| *(tidak ada)* | 30 hari terakhir |
+| `days=7` | 7 hari terakhir |
+| `days=30` | 30 hari terakhir |
+| `year=YYYY` | Seluruh tahun tersebut |
+| `year=YYYY&month=MM` | Bulan tersebut pada tahun tersebut |
+
+Jika `year` diberikan, `days` diabaikan.
+
+### Granularitas periode tren
+
+| Kondisi filter | Format `period` |
+| :--- | :--- |
+| `days=7` atau `days=30` (default) | Harian — `YYYY-MM-DD` |
+| `year` saja | Bulanan — `YYYY-MM` |
+| `year` + `month` | Harian — `YYYY-MM-DD` |
 
 ---
 
-## 2. GET `/api/dashboard/overview`
+## 1. GET `/api/dashboard/overview`
 
-Mengambil ringkasan KPI utama dalam satu rentang waktu. Cocok untuk kartu-kartu ringkasan di bagian atas halaman dashboard.
+Mengambil ringkasan KPI utama (angka tunggal) beserta data tren waktu untuk menampilkan *line chart* pada tiga metrik utama: jumlah chat, completion rate, dan persentase like.
 
 ### Query Parameters
 
-Menggunakan **Skema B**.
+Menggunakan filter waktu standar di atas.
 
 ### Success Response — `200 OK`
 
@@ -132,6 +73,20 @@ Menggunakan **Skema B**.
         "count": 28,
         "percentage": 19.72
       }
+    ],
+    "trend": [
+      {
+        "period": "2026-04-23",
+        "totalChats": 12,
+        "completionRate": 66.67,
+        "likePercentage": 80.00
+      },
+      {
+        "period": "2026-04-24",
+        "totalChats": 9,
+        "completionRate": 77.78,
+        "likePercentage": 100.00
+      }
     ]
   }
 }
@@ -139,22 +94,35 @@ Menggunakan **Skema B**.
 
 ### Keterangan Field
 
+**Aggregate (angka tunggal)**
+
 | Field | Deskripsi |
 | :--- | :--- |
 | `totalChats` | Total jumlah sesi chat dalam rentang waktu |
-| `completionRate` | Persentase chat yang `is_resolved = true` |
+| `completionRate` | Persentase chat dengan `is_resolved = true` dari semua chat |
 | `likePercentage` | Persentase *like* dari seluruh feedback yang ada (termasuk *none*) |
 | `intents[].percentage` | Persentase intent tersebut dari total chat, dibulatkan 2 desimal |
 
+**Trend (per periode)**
+
+| Field | Deskripsi |
+| :--- | :--- |
+| `trend[].period` | Label periode sesuai granularitas (lihat tabel di atas) |
+| `trend[].totalChats` | Jumlah sesi chat pada periode tersebut |
+| `trend[].completionRate` | Completion rate pada periode tersebut (`resolvedChats / totalChats × 100`) |
+| `trend[].likePercentage` | Persentase *like* pada periode tersebut; `0` jika tidak ada feedback pada periode tersebut |
+
+> **Catatan:** `trend` dibentuk dari penggabungan data chat dan feedback per periode. Periode yang memiliki data chat tetapi tidak ada feedback akan tetap muncul dengan `likePercentage: 0`.
+
 ---
 
-## 3. GET `/api/dashboard/session-intent`
+## 2. GET `/api/dashboard/session-intent`
 
 Mengambil distribusi intent, word cloud dari pesan pengguna, dan analisis pola sesi. Digunakan untuk memahami topik yang paling sering ditanyakan dan mengidentifikasi drop-off.
 
 ### Query Parameters
 
-Menggunakan **Skema B**.
+Menggunakan filter waktu standar di atas.
 
 ### Success Response — `200 OK`
 
@@ -196,16 +164,16 @@ Menggunakan **Skema B**.
 
 | Field | Deskripsi |
 | :--- | :--- |
-| `intent` | Nama intent OJK |
+| `intent` | Nama intent OJK (lihat daftar di bawah) |
 | `count` | Jumlah chat dengan intent tersebut |
-| `percentage` | Persentase dari total chat |
+| `percentage` | Persentase dari total chat, dibulatkan 2 desimal |
 
 **`wordCloud[]`**
 
 | Field | Deskripsi |
 | :--- | :--- |
 | `word` | Kata yang diekstrak dari pesan pengguna (`sender_type = 'user'`) |
-| `count` | Frekuensi kemunculan kata dalam rentang waktu |
+| `count` | Frekuensi kemunculan dalam rentang waktu |
 
 Word cloud diproses di sisi server: konten pesan pengguna ditokenisasi, *stop words* Bahasa Indonesia difilter, dan dikembalikan maksimal **50 kata teratas** berdasarkan frekuensi.
 
@@ -214,8 +182,8 @@ Word cloud diproses di sisi server: konten pesan pengguna ditokenisasi, *stop wo
 | Field | Deskripsi |
 | :--- | :--- |
 | `totalSessions` | Total jumlah sesi chat |
-| `withIntent` | Jumlah chat yang memiliki intent terklasifikasi (bukan `'Lainnya'`) |
-| `withContact` | Jumlah chat yang `is_resolved = true` (pengguna memperoleh kanal/kontak resmi OJK) |
+| `withIntent` | Jumlah chat dengan intent terklasifikasi (bukan `'Lainnya'`) |
+| `withContact` | Jumlah chat yang `is_resolved = true` — pengguna memperoleh kanal/kontak resmi OJK |
 | `dropOff` | Jumlah chat dengan intent selain `'Literasi & Tips Keuangan'` dan `'Lainnya'`, tetapi `is_resolved = false` |
 
 **Intent yang tersedia:**
@@ -235,21 +203,13 @@ Word cloud diproses di sisi server: konten pesan pengguna ditokenisasi, *stop wo
 
 ---
 
-## 4. GET `/api/dashboard/feedback`
+## 3. GET `/api/dashboard/feedback`
 
-Mengambil data *Customer Satisfaction Score* (CSAT) secara keseluruhan, per intent, dan tren waktu. CSAT dihitung dari perbandingan *like* terhadap total *like + dislike* (feedback `'none'` tidak dihitung).
+Mengambil data *Customer Satisfaction Score* (CSAT) secara keseluruhan, per intent, dan tren waktu. CSAT dihitung dari perbandingan *like* terhadap total *like + dislike*; feedback bernilai `'none'` tidak dihitung.
 
 ### Query Parameters
 
-Menggunakan **Skema B**.
-
-### Granularitas Tren
-
-| Kondisi Filter | Pengelompokan `trend[]` |
-| :--- | :--- |
-| `days=7` atau `days=30` (default) | Per hari (`YYYY-MM-DD`) |
-| `year` saja | Per bulan (`YYYY-MM`) |
-| `year` + `month` | Per hari (`YYYY-MM-DD`) |
+Menggunakan filter waktu standar di atas.
 
 ### Success Response — `200 OK`
 
@@ -289,15 +249,32 @@ Menggunakan **Skema B**.
 
 ### Keterangan Field
 
+**Aggregate (angka tunggal)**
+
 | Field | Deskripsi |
 | :--- | :--- |
-| `csat` | CSAT keseluruhan: `likes / (likes + dislikes) × 100`, dibulatkan 2 desimal |
+| `csat` | CSAT keseluruhan: `likes / (likes + dislikes) × 100`, dibulatkan 2 desimal. `0` jika belum ada feedback |
 | `totalFeedback` | Total feedback yang diberikan (`likes + dislikes`, tidak termasuk `'none'`) |
 | `likes` | Jumlah feedback *like* |
 | `dislikes` | Jumlah feedback *dislike* |
-| `csatByIntent[].csat` | CSAT untuk intent tersebut, formula sama dengan `csat` keseluruhan |
-| `csatByIntent[].total` | `likes + dislikes` untuk intent tersebut |
-| `trend[].period` | Label periode sesuai granularitas (lihat tabel Granularitas Tren) |
+
+**`csatByIntent[]`**
+
+| Field | Deskripsi |
+| :--- | :--- |
+| `intent` | Nama intent OJK, didapat dari join `message_feedbacks → messages → chats` |
+| `likes` | Jumlah *like* untuk intent tersebut |
+| `dislikes` | Jumlah *dislike* untuk intent tersebut |
+| `total` | `likes + dislikes` untuk intent tersebut |
+| `csat` | CSAT untuk intent tersebut, formula sama dengan `csat` keseluruhan |
+
+**`trend[]`**
+
+| Field | Deskripsi |
+| :--- | :--- |
+| `period` | Label periode sesuai granularitas (lihat tabel Filter Waktu di atas) |
+| `likes` | Jumlah *like* pada periode tersebut |
+| `dislikes` | Jumlah *dislike* pada periode tersebut |
 
 ---
 

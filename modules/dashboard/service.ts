@@ -1,21 +1,22 @@
 import {
-  getDashboardCompletionRate,
-  getDashboardTopIntents,
-  getDashboardFeedbackStats,
   getDashboardOverviewSummary,
   getDashboardOverviewIntents,
   getDashboardOverviewLikeRate,
+  getOverviewTrendChats,
+  getOverviewTrendFeedbacks,
   getSessionAnalysisStats,
   getUserMessageContents,
   getFeedbackOverall,
   getFeedbackByIntent,
   getFeedbackTrend,
-  DashboardStatsParams,
   DashboardOverviewParams,
 } from "./repository";
 
+// ---------------------------------------------------------------------------
+// Word cloud helpers
+// ---------------------------------------------------------------------------
+
 const STOP_WORDS = new Set([
-  // common Indonesian filler / function words
   "yang", "dan", "atau", "dengan", "untuk", "dari", "pada", "ini", "itu", "juga",
   "adalah", "ada", "saya", "anda", "bisa", "akan", "sudah", "tidak", "belum",
   "saja", "lebih", "agar", "kami", "kita", "mereka", "dapat", "harus", "perlu",
@@ -30,8 +31,7 @@ const STOP_WORDS = new Set([
   "banyak", "ketika", "saat", "cukup", "hanya", "kalau", "mau", "diri",
   "kata", "gimana", "gak", "nggak", "dong", "yuk", "deh", "sih",
   "oke", "okay", "iya", "nih", "loh", "dulu", "jangan", "jelas",
-  "tapi", "dong", "banget", "sekali", "sangat", "sudah", "menjadi",
-  "tolong", "butuh", "ingin", "minta", "mohon", "berarti", "karena",
+  "banget", "sekali", "sangat", "menjadi", "butuh", "minta", "berarti",
 ]);
 
 function processWordCloud(contents: string[]): { word: string; count: number }[] {
@@ -55,33 +55,26 @@ function processWordCloud(contents: string[]): { word: string; count: number }[]
     .slice(0, 50);
 }
 
-export async function getDashboardStats(params: DashboardStatsParams) {
-  const completionData = await getDashboardCompletionRate(params);
-  const intentsData = await getDashboardTopIntents(params);
-  const feedbackData = await getDashboardFeedbackStats(params);
+// ---------------------------------------------------------------------------
+// CSAT helper
+// ---------------------------------------------------------------------------
 
-  const completionRate = completionData.map((row) => {
-    const rate = row.totalChats > 0 ? (row.resolvedChats / row.totalChats) * 100 : 0;
-    return {
-      period: row.period,
-      totalChats: row.totalChats,
-      resolvedChats: row.resolvedChats,
-      rate: Number(rate.toFixed(2))
-    };
-  });
-
-  return {
-    completionRate,
-    topIntents: intentsData,
-    feedbackStats: feedbackData,
-  };
+function computeCsat(likes: number, dislikes: number): number {
+  const rated = likes + dislikes;
+  return rated > 0 ? Number(((likes / rated) * 100).toFixed(2)) : 0;
 }
 
+// ---------------------------------------------------------------------------
+// Service functions
+// ---------------------------------------------------------------------------
+
 export async function getDashboardOverview(params: DashboardOverviewParams) {
-  const [summary, intents, likeData] = await Promise.all([
+  const [summary, intents, likeData, trendChats, trendFeedbacks] = await Promise.all([
     getDashboardOverviewSummary(params),
     getDashboardOverviewIntents(params),
     getDashboardOverviewLikeRate(params),
+    getOverviewTrendChats(params),
+    getOverviewTrendFeedbacks(params),
   ]);
 
   const completionRate =
@@ -94,6 +87,25 @@ export async function getDashboardOverview(params: DashboardOverviewParams) {
       ? Number(((likeData.likes / likeData.total) * 100).toFixed(2))
       : 0;
 
+  // Merge chat trend with feedback trend keyed on period
+  const feedbackByPeriod = new Map(trendFeedbacks.map((r) => [r.period, r]));
+
+  const trend = trendChats.map((r) => {
+    const fb = feedbackByPeriod.get(r.period);
+    return {
+      period: r.period,
+      totalChats: r.totalChats,
+      completionRate:
+        r.totalChats > 0
+          ? Number(((r.resolvedChats / r.totalChats) * 100).toFixed(2))
+          : 0,
+      likePercentage:
+        fb && fb.total > 0
+          ? Number(((fb.likes / fb.total) * 100).toFixed(2))
+          : 0,
+    };
+  });
+
   return {
     totalChats: summary.totalChats,
     completionRate,
@@ -103,12 +115,8 @@ export async function getDashboardOverview(params: DashboardOverviewParams) {
       count: row.count,
       percentage: Number(row.percentage),
     })),
+    trend,
   };
-}
-
-function computeCsat(likes: number, dislikes: number): number {
-  const rated = likes + dislikes;
-  return rated > 0 ? Number(((likes / rated) * 100).toFixed(2)) : 0;
 }
 
 export async function getDashboardFeedback(params: DashboardOverviewParams) {
