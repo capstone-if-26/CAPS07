@@ -144,7 +144,7 @@ export default function SidebarExpanded({
 
         .sdraw-bottom {
           border-top: 1px solid #f3f4f6;
-          padding: 10px 10px 20px;
+          padding: 10px 10px 80px;
           display: flex;
           flex-direction: column;
           gap: 2px;
@@ -209,14 +209,16 @@ export default function SidebarExpanded({
 
         {/* Bottom: Pengaturan + Logout */}
         <div className="sdraw-bottom">
-        <button className="sdraw-bottom-item">
-          Pengaturan
-        </button>
+          <button className="sdraw-bottom-item">
+            <Image src="/settings.png" alt="settings" width={18} height={18} />
+            Pengaturan
+          </button>
 
-        <button className="sdraw-bottom-item danger">
-          Logout
-        </button>
-      </div>
+          <button className="sdraw-bottom-item danger">
+            <Image src="/logout.png" alt="logout" width={18} height={18} />
+            Keluar
+          </button>
+        </div>
       </div>
     </>
   )

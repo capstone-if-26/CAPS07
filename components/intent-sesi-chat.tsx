@@ -88,7 +88,7 @@ export default function IntentSesiChatPage() {
   )
 
   return (
-    <>
+    <div style={{ minHeight: "calc(100vh - 110px)" }}>
       <style>{`
         @keyframes shimmer {
           0% { background-position: 200% 0; }
@@ -480,6 +480,6 @@ export default function IntentSesiChatPage() {
           )}
         </div>
       </div>
-    </>
+    </div>
   )
 }

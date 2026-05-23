@@ -19,11 +19,19 @@ type OverviewIntent = {
   percentage: number
 }
 
+type OverviewTrend = {
+  period: string
+  totalChats: number
+  completionRate: number
+  likePercentage: number
+}
+
 type OverviewData = {
   totalChats: number
   completionRate: number
   likePercentage: number
   intents: OverviewIntent[]
+  trend: OverviewTrend[]
 }
 
 // Constants
@@ -258,6 +266,7 @@ function SidebarBottomIcon({ src, alt, label }: { src: string; alt: string; labe
 export default function AdminDashboardPage() {
   const [overview, setOverview] = useState<OverviewData | null>(null)
   const [sessionIntent, setSessionIntent] = useState<SessionIntentData | null>(null)
+  const [overviewTrend, setOverviewTrend] = useState<OverviewTrend[]>([])
   const [loading, setLoading] = useState(true)
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [activeMenu, setActiveMenu] = useState("Overview")
@@ -273,7 +282,10 @@ export default function AdminDashboardPage() {
       overviewRes.json(),
       sessionRes.json(),
     ])
-    if (overviewJson.status) setOverview(overviewJson.data)
+    if (overviewJson.status) {
+      setOverview(overviewJson.data)
+      setOverviewTrend(overviewJson.data.trend ?? [])
+    }
     if (sessionJson.status) setSessionIntent(sessionJson.data)
   } catch (e) {
     console.error("Failed to fetch dashboard data", e)
@@ -315,24 +327,22 @@ useEffect(() => { fetchAll() }, [fetchAll])
 
 
   // Line chart data
-  // /api/dashboard/overview tidak mengembalikan time-series,
-  // line chart tetap pakai dummy sampai ada endpoint time-series khusus
-  const DUMMY_LINE = [
-    { date: "1 Oct",  Session: 80,  Conversion: 60,  CSAT: 75 },
-    { date: "5 Oct",  Session: 110, Conversion: 85,  CSAT: 78 },
-    { date: "10 Oct", Session: 95,  Conversion: 72,  CSAT: 70 },
-    { date: "14 Oct", Session: 130, Conversion: 100, CSAT: 82 },
-    { date: "17 Oct", Session: 150, Conversion: 120, CSAT: 88 },
-    { date: "20 Oct", Session: 170, Conversion: 138, CSAT: 92 },
-    { date: "23 Oct", Session: 140, Conversion: 108, CSAT: 84 },
-    { date: "26 Oct", Session: 160, Conversion: 125, CSAT: 86 },
-    { date: "28 Oct", Session: 125, Conversion: 95,  CSAT: 79 },
-    { date: "30 Oct", Session: 175, Conversion: 140, CSAT: 90 },
-  ]
+  const formatPeriodLabel = (period: string) => {
+    if (/^\d{4}-\d{2}$/.test(period)) {
+      const [y, m] = period.split("-")
+      return new Date(Number(y), Number(m) - 1).toLocaleDateString("id-ID", { month: "short", year: "numeric" })
+    }
+    const d = new Date(period)
+    return d.toLocaleDateString("id-ID", { day: "numeric", month: "short" })
+  }
 
-  const lineData = DUMMY_LINE
-
-    // Top intents table — DUMMY DATA sementara
+  const lineData = overviewTrend.map(d => ({
+    date: formatPeriodLabel(d.period),
+    Session: d.totalChats,
+    Conversion: d.completionRate,
+    CSAT: d.likePercentage,
+  }))
+  
   const topIntentsTable = intents.filter(d => d.intent !== "Lainnya").slice(0, 5).map((item, i) => {
   const avgCount = intents.slice(0, 5).reduce((s, d) => s + d.count, 0) / Math.max(intents.slice(0, 5).length, 1)
   const trendUp = item.count >= avgCount
@@ -352,6 +362,7 @@ useEffect(() => { fetchAll() }, [fetchAll])
           min-height: 100vh;
           background: #f4f5f7;
           font-family: 'DM Sans', sans-serif;
+          overflow: hidden;
         }
 
         /* Sidebar */
@@ -396,22 +407,16 @@ useEffect(() => { fetchAll() }, [fetchAll])
           flex: 1;
           display: flex;
           flex-direction: column;
-          min-height: 100vh;
+          height: 100vh;
+          overflow-y: auto;
         }
 
         .content {
-          padding: 24px 28px;
+          padding: 24px 28px 60px;
           flex: 1;
           margin-top: 57px;
         }
 
-        .dok-table-wrap {
-          background: #fff;
-          border-radius: 14px;
-          box-shadow: 0 1px 6px rgba(0,0,0,0.07);
-          overflow: visible;
-          min-width: 1400px;
-        }
 
         /* Topbar */
         .topbar {
@@ -922,7 +927,7 @@ useEffect(() => { fetchAll() }, [fetchAll])
             ) : activeMenu === "Dokumen" ? (
               <DokumenPage />
             ) : (
-              <>
+            <div style={{ minHeight: "calc(100vh - 110px)" }}>
 
             {/* Stat cards */}
             <div className="stat-row">
@@ -1221,7 +1226,7 @@ useEffect(() => { fetchAll() }, [fetchAll])
               })()} 
             </div>
             </div>
-                 </>
+                 </div>
             )}
           </div>
         </div>
