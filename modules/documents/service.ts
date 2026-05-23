@@ -5,6 +5,7 @@ import {
   createDocumentRecord,
   updateDocumentProcessingStatus,
   updateDocumentTotalChunks,
+  updateDocumentStatus as updateDocumentStatusRepository,
 } from "./repository";
 import { upsertChunksPipeline } from "@/lib/pinecone/utils";
 import {
@@ -19,20 +20,20 @@ import { DocumentUploadError, DocumentOperationError } from "./error";
 export async function fetchAllAvailableDocuments(
   search: string = "",
   page: number = 1,
-  limit: number = 10
+  limit: number = 10,
 ) {
   try {
     const offset = (page - 1) * limit;
     const result = await getAllDocuments({ search, limit, offset });
-    
+
     return {
       documents: result.data,
       metadata: {
         total: result.totalCount,
         page,
         limit,
-        totalPages: Math.ceil(result.totalCount / limit)
-      }
+        totalPages: Math.ceil(result.totalCount / limit),
+      },
     };
   } catch (error) {
     console.error("Gagal mengambil semua dokumen:", error);
@@ -144,9 +145,7 @@ export async function initiateDocumentUpload(
   const fileHash = crypto.createHash("sha256").update(file).digest("hex");
 
   // 3. Parse effectiveDate jika ada
-  const parsedEffectiveDate = effectiveDate
-    ? new Date(effectiveDate)
-    : null;
+  const parsedEffectiveDate = effectiveDate ? new Date(effectiveDate) : null;
 
   // 4. Insert record ke database dengan status "processing"
   let documentRecord;
@@ -252,10 +251,7 @@ export async function processDocumentInBackground(
     const errorMessage =
       error instanceof Error ? error.message : "Unknown processing error";
 
-    console.error(
-      `[Background] Gagal memproses dokumen ${documentId}:`,
-      error,
-    );
+    console.error(`[Background] Gagal memproses dokumen ${documentId}:`, error);
 
     try {
       await updateDocumentProcessingStatus(documentId, "failed", errorMessage);
@@ -291,7 +287,7 @@ export async function updateDocumentStatus(id: string, documentStatus: string) {
       );
     }
 
-    await updateDocumentStatus(id, documentStatus);
+    await updateDocumentStatusRepository(id, documentStatus);
   } catch (error) {
     console.error(`Gagal mengubah status dokumen dengan ID '${id}':`, error);
     throw error;
