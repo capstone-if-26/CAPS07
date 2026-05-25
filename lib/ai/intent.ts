@@ -4,6 +4,7 @@ import { stripSummaryMarkdownArtifacts } from '@/lib/format-plain-summary';
 import { Chats } from '@/modules/chats/type';
 import { readFile } from 'fs/promises';
 import path from 'path';
+import { getClassifyIntentAndRelevancePrompt, getGenerateIntentBasedSummaryPrompt } from './prompts';
 
 export const OJK_INTENTS = [
   'Cek Legalitas Pinjol/Investasi',
@@ -32,15 +33,15 @@ type IntentRequirementsMap = Record<OjkIntent, string[]>;
 const OFF_TOPIC_TEMPLATE = 'Maaf, saya hanya dapat membantu pertanyaan yang relevan dengan OJK, layanan keuangan, perlindungan konsumen, perbankan, investasi, pinjol, SLIK, dan penipuan keuangan. Silakan ajukan pertanyaan yang terkait topik tersebut.';
 
 const SUMMARY_HEADING_TO_INTENT: Record<string, OjkIntent> = {
-  'hak konsumen': 'Hak Saya sebagai Konsumen',
-  'investasi dan kripto aman': 'Panduan Investasi & Kripto Aman',
-  'literasi keuangan': 'Literasi & Tips Keuangan',
-  'legalitas pinjol': 'Cek Legalitas Pinjol/Investasi',
-  'modus penipuan': 'Kenali Modus Penipuan',
-  'produk bank': 'Panduan Produk Bank',
-  'penipuan (iasc)': 'IASC — Anti-Scam Centre',
-  'pengaduan konsumen': 'Lapor Penipuan (OJK / IASC)',
-  'cek slik': 'Cek SLIK / Riwayat Kredit',
+  'edukasi tentang hak dan pelindungan konsumen di sektor jasa keuangan, termasuk jalur pengaduan melalui APPK/Kontak OJK 157': 'Hak Saya sebagai Konsumen',
+  'panduan agar masyarakat terhindar dari investasi ilegal dan aset kripto yang tidak berizin, serta belajar mengenali entitas yang resmi diawasi OJK untuk aset keuangan digital dan kripto.': 'Panduan Investasi & Kripto Aman',
+  'materi literasi keuangan umum agar masyarakat lebih paham produk, risiko, dan pengelolaan keuangan.': 'Literasi & Tips Keuangan',
+  'cek apakah pinjaman online/fintech lending berizin atau ilegal, biasanya dengan merujuk ke daftar penyelenggara resmi OJK dan peringatan terhadap pinjol ilegal.': 'Cek Legalitas Pinjol/Investasi',
+  'edukasi tentang pola-pola scam yang sering dipakai pelaku, termasuk penipuan digital, impersonation scam, dan modus investasi/kripto ilegal.': 'Kenali Modus Penipuan',
+  'informasi dasar tentang produk perbankan seperti giro, tabungan, deposito, serta kredit/pembiayaan.': 'Panduan Produk Bank',
+  'kanal khusus untuk laporan penipuan keuangan melalui Indonesia Anti-Scam Centre (IASC).': 'IASC — Anti-Scam Centre',
+  'layanan pengaduan konsumen OJK melalui APPK/Kontak 157, termasuk telepon, WhatsApp, email, dan portal online; untuk kasus scam keuangan, laporan juga bisa diarahkan ke IASC.': 'Lapor Penipuan (OJK / IASC)',
+  'pengecekan riwayat kredit/debitur atau iDeb melalui SLIK, yang digunakan lembaga jasa keuangan untuk menilai kelayakan kredit/pembiayaan.': 'Cek SLIK / Riwayat Kredit',
 };
 
 let cachedRequirements: IntentRequirementsMap | null = null;
@@ -139,21 +140,7 @@ export async function classifyIntentAndRelevance(
   const inferredIntent = inferIntentFromText(`${memoryText}\n${question}`);
 
   const intentList = OJK_INTENTS.join(' | ');
-
-  const systemPrompt = `OJK/financial consumer chatbot — classify conversation intent for summary generation only. Output JSON only, no markdown.
-Schema: {"intent":string,"isOjkRelevant":boolean,"confidence":number,"reason":string}
-intent must be exactly one of: ${intentList}
-reason: at most 6 words.
-Rules:
-- Use the full context and latest user question.
-- Bias isOjkRelevant=true for money, scams, tipu, banks, consumers, vague problems that may involve finance.
-- false only for obvious off-topic (school math, coding tutorials, games/anime, recipes).
-- Short follow-ups stay relevant if the thread is financial.
-- If the user is a victim, needs help after being scammed, wants to report fraud, asks what to do after "kena tipu", or describes a personal fraud/complaint case, choose "Lapor Penipuan (OJK / IASC)".
-- Choose "IASC — Anti-Scam Centre" only when the conversation explicitly asks about IASC/Indonesia Anti-Scam Centre itself or requirements/status for that channel.
-- Choose "Kenali Modus Penipuan" for education about scam patterns, examples, prevention, or general explanation without an active personal case.`;
-
-  const userPrompt = `Context:\n${memoryText}\n\nQuestion:\n${question}`;
+  const { systemPrompt, userPrompt } = getClassifyIntentAndRelevancePrompt(intentList, memoryText, question);
 
   try {
     const { text } = await generateText({
@@ -285,32 +272,11 @@ export async function generateIntentBasedSummary(
     return 'Belum ada percakapan yang dapat dirangkum.';
   }
 
-  const systemPrompt = `You generate concise Indonesian summaries for OJK chatbot conversations.
-
-Rules:
-- Output plain text only. No Markdown: no **, __, # headings, backticks, or link syntax.
-- You may use simple line breaks. For lists, use a hyphen and space at the start of each line (e.g. "- Poin: teks").
-- Keep only information explicitly present in the conversation.
-- Do not invent missing details. If a required point is not present, still include that point and write "Tidak dibahas dalam percakapan."
-- Include every required summary point exactly once. Do not skip any required point.
-- Start each required point with its label, for example "- Jenis produk: ...".
-- Do not put labels in quotes for emphasis; write normally.
-- Keep it practical and concise.`;
-
   const requiredPointsText = requiredPoints.length > 0
     ? requiredPoints.map((point) => `- ${point}`).join('\n')
     : '- Ringkasan percakapan utama';
 
-  const userPrompt = `Intent: ${intent}
-
-Required summary points for this intent:
-${requiredPointsText}
-
-Conversation:
-${conversation}
-
-Instruction:
-Write the summary in plain Indonesian text only. Include every required point above, in the same order. If there is no evidence for a point, write "Tidak dibahas dalam percakapan." for that point.`;
+  const { systemPrompt, userPrompt } = getGenerateIntentBasedSummaryPrompt(intent, requiredPointsText, conversation);
 
   try {
     const { text } = await generateText({

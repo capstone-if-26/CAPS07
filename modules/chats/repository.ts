@@ -44,3 +44,22 @@ export async function updateChatMetadata(chatId: string, metadata: string) {
     .returning();
   return updatedChat;
 }
+
+export async function updateChatIntent(chatId: string, intent: string) {
+  const [updatedChat] = await db.update(chats)
+    .set({ intent })
+    .where(eq(chats.id, chatId))
+    .returning();
+  return updatedChat;
+}
+
+export async function updateChatResolution(chatId: string, isResolved: boolean) {
+  const [updatedChat] = await db.update(chats)
+    .set({ 
+      isResolved, 
+      resolvedAt: isResolved ? new Date() : null 
+    })
+    .where(eq(chats.id, chatId))
+    .returning();
+  return updatedChat;
+}

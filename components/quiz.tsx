@@ -97,16 +97,16 @@ export default function Quiz({ chatId, onClose }: QuizProps) {
 
     if (!isSubmitted) {
       return selected === opt
-        ? "bg-green-500 border-green-500 text-white shadow-inner"
+        ? "bg-green-700 border-green-700 text-white shadow-inner"
         : "bg-[#f5f5f5] border-[#a11212] text-gray-700 hover:bg-gray-100";
     }
 
     if (opt === correct) {
-      return "bg-green-500 border-green-600 text-white shadow-md scale-[1.02]";
+      return "bg-green-700 border-green-800 text-white shadow-md scale-[1.02]";
     }
 
     if (opt === selected) {
-      return "bg-red-500 border-red-600 text-white";
+      return "bg-red-700 border-red-800 text-white";
     }
 
     return "bg-gray-100 border-gray-200 text-gray-400 opacity-70";
@@ -117,7 +117,7 @@ export default function Quiz({ chatId, onClose }: QuizProps) {
       <>
         <div className="absolute inset-0 backdrop-blur-[3px] bg-black/20 z-40 rounded-2xl" />
         <div className="absolute inset-0 flex items-center justify-center z-50">
-          <div className="w-[92%] max-w-[320px] sm:max-w-[240px] sm:scale-[0.85] bg-[#a11212] rounded-2xl shadow-xl flex flex-col h-[420px] sm:h-[380px] overflow-hidden" style={{ border: "1px solid #c21f26" }}>
+          <div className="w-[92%] max-w-[500px] sm:max-w-[460px] sm:scale-[0.85] bg-[#a11212] rounded-2xl shadow-xl flex flex-col h-[420px] sm:h-[380px] overflow-hidden" style={{ border: "1px solid #c21f26" }}>
             <div className="flex items-center px-4 py-2">
               <Image src="/ikon-quiz.png" alt="" width={18} height={18} />
               <span className="text-white text-sm sm:text-xs font-bold ml-2 flex-1 brightness-0 invert">
@@ -144,7 +144,7 @@ export default function Quiz({ chatId, onClose }: QuizProps) {
       <>
         <div className="absolute inset-0 backdrop-blur-[3px] bg-black/20 z-40 rounded-2xl" />
         <div className="absolute inset-0 flex items-center justify-center z-50">
-          <div className="w-[92%] max-w-[320px] sm:max-w-[240px] sm:scale-[0.85] bg-[#a11212] rounded-2xl shadow-xl flex flex-col h-[420px] sm:h-[380px] overflow-hidden" style={{ border: "1px solid #c21f26" }}>
+          <div className="w-[92%] max-w-[500px] sm:max-w-[460px] sm:scale-[0.85] bg-[#a11212] rounded-2xl shadow-xl flex flex-col h-[420px] sm:h-[380px] overflow-hidden" style={{ border: "1px solid #c21f26" }}>
             <div className="flex items-center px-4 py-2">
               <Image src="/ikon-quiz.png" alt="" width={18} height={18} />
               <span className="text-white text-sm sm:text-xs font-bold ml-2 flex-1 brightness-0 invert">
@@ -176,7 +176,7 @@ export default function Quiz({ chatId, onClose }: QuizProps) {
       <div className="absolute inset-0 backdrop-blur-[3px] bg-black/20 z-40 rounded-2xl" />
 
       <div className="absolute inset-0 flex items-center justify-center z-50">
-        <div className="w-[92%] max-w-[320px] sm:max-w-[240px] sm:scale-[0.85] bg-[#a11212] rounded-2xl shadow-xl flex flex-col h-[420px] sm:h-[380px] overflow-hidden" style={{ border: "1px solid #c21f26" }}>
+        <div className="w-[92%] max-w-[500px] sm:max-w-[460px] sm:scale-[0.85] bg-[#a11212] rounded-2xl shadow-xl flex flex-col h-[420px] sm:h-[380px] overflow-hidden" style={{ border: "1px solid #c21f26" }}>
           {/* Header */}
           <div className="flex items-center px-4 py-2">
             <Image src="/ikon-quiz.png" alt="" width={18} height={18} />
@@ -234,7 +234,7 @@ export default function Quiz({ chatId, onClose }: QuizProps) {
                       }`}
                     >
                       <span className="font-bold">
-                        {answers[qIdx] === q.answer ? "✓ Tepat! " : "✗ Kurang tepat. "}
+                        {answers[qIdx] === q.answer ? "Tepat! " : "Kurang tepat. "}
                       </span>
                       {q.reason}
                     </p>
@@ -249,7 +249,7 @@ export default function Quiz({ chatId, onClose }: QuizProps) {
                         key={i}
                         onClick={() => handleSelect(qIdx, opt)}
                         className={`
-                          text-[9.5px] sm:text-[8px] px-2 py-2 rounded-xl border
+                          text-[10px] sm:text-[9px] px-2 py-2 rounded-xl border
                           flex items-center gap-1.5
                           transition-all duration-300 select-none
                           ${!submitted[qIdx] ? "cursor-pointer hover:shadow-sm" : "cursor-default"}

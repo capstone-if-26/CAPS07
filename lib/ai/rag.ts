@@ -30,6 +30,7 @@ import {
   getCreateQuizPrompt,
   getGenerateConversationSummaryPrompt,
 } from "./prompts";
+import { ASK_USER_QUESTION_TOOL_DESCRIPTION, RETRIEVE_POLICY_CONTEXT_DESCRIPTION } from "./constants";
 
 export type {
   AgenticRagStreamEvent,
@@ -74,16 +75,17 @@ export function createAgenticRagStream(params: AgenticRagStreamParams) {
     model,
     system: systemPrompt,
     prompt: userPrompt,
-    temperature: 0.2,
+    temperature: 0.5,
     topP: 0.9,
+    frequencyPenalty: 0.3,
+    presencePenalty: 0.2,
     stopWhen: forceQuestionTool ? stepCountIs(1) : stepCountIs(4),
     toolChoice: forceQuestionTool
       ? { type: "tool", toolName: "ask_user_question" }
       : "auto",
     tools: {
       retrieve_policy_context: tool({
-        description:
-          "Retrieve policy/regulation chunks from vector database. Use this for OJK policy, compliance, legal, or document-grounded questions.",
+        description: RETRIEVE_POLICY_CONTEXT_DESCRIPTION,
         inputSchema: z.object({
           query: z.string().min(1),
           namespaces: z.array(z.string()).optional(),
@@ -157,8 +159,7 @@ export function createAgenticRagStream(params: AgenticRagStreamParams) {
         },
       }),
       ask_user_question: tool({
-        description:
-          "Ask the user a follow-up question with radio options. ALWAYS use this tool instead of normal text for clarification questions that include selectable answers/options.",
+        description: ASK_USER_QUESTION_TOOL_DESCRIPTION,
         inputSchema: z.object({
           question: z.string().min(1).max(220),
           options: z.array(z.string().min(1).max(80)).min(1).max(4),

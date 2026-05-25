@@ -6,6 +6,7 @@ import {
   RecordMetadata,
   ScoredPineconeRecord,
 } from "@pinecone-database/pinecone";
+import { pineconeIndex } from ".";
 
 // Mengimpor tipe dari implementasi chunker sebelumnya
 import { ChunkData, ChunkMetadata } from "@/types/chunker";
@@ -46,12 +47,12 @@ function extractPineconeMetadata(chunk: ChunkData): RecordMetadata {
 export async function upsertChunksPipeline(
   chunks: ChunkData[],
   namespaceId: string,
-  batchSize: number = 100, // Default batch_size = 100
+  batchSize: number = 24, 
 ): Promise<void> {
   if (chunks.length === 0) return;
 
-  // 1. Batasi ukuran batch maksimal 100 untuk mematuhi regulasi Inference API
-  const safeBatchSize = Math.min(batchSize, 100);
+  // 1. Batasi ukuran batch maksimal 64 untuk mematuhi regulasi Inference API
+  const safeBatchSize = Math.min(batchSize, 64);
   console.log(
     `Memulai proses pipeline cloud untuk ${chunks.length} chunks (Batch: ${safeBatchSize})...`,
   );
@@ -110,13 +111,26 @@ export async function upsertChunksPipeline(
         `[FATAL] Gagal memproses batch indeks ${start} setelah maksimum percobaan:`,
         error,
       );
+
+      throw new Error("Gagal memproses batch indeks" + start + "setelah maksimum percobaan");
     }
   }
 }
 
 /**
- * Melakukan pencarian Nearest Neighbor di ruang vektor Pinecone.
+ * Menghapus namespace pinecone beserta seluruh isinya
  */
+export async function deletePineconeNamespace(namespace: string) {
+  try {
+    await pineconeIndex.deleteNamespace(namespace);
+
+    console.log(`Namespace '${namespace}' berhasil dihapus.`);
+  } catch (error) {
+    console.error(`Gagal menghapus namespace '${namespace}':`, error);
+    throw error;
+  }
+}
+
 export async function retrieveRelevantChunks(
   question: string,
   namespaces: string[],

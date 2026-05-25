@@ -4,9 +4,7 @@ import { messages } from './messages';
 
 export const messageFeedbacks = pgTable('message_feedbacks', {
   id: uuid('id').primaryKey().defaultRandom(),
-  rating: integer('rating'),
-  reason: varchar('reason', { length: 100 }),
-  metadata: text('metadata'),
+  feedback: varchar('feedback', { length: 10 }).default('none'), // like, dislike, none
 
   createdAt: timestamp('created_at').defaultNow().notNull(),
   deletedAt: timestamp('deleted_at'),

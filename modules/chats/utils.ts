@@ -2,7 +2,7 @@ import { AgenticKnowledgeDocument } from "@/lib/ai/rag";
 import { OjkIntent } from "@/lib/ai/intent";
 import { updateChatMetadata } from "@/modules/chats/repository";
 import { getMessagesByChatId } from "@/modules/messages/repository";
-import { fetchAllAvailableDocuments } from "@/modules/documents/service";
+import { getApplicableDocuments } from "@/modules/documents/repository";
 import type { Chats, ChatMetadataShape, ClientMessageSnapshot } from "./type";
 
 const DEFAULT_NAMESPACE =
@@ -172,7 +172,7 @@ export function clientSnapshotToChats(msgs: ClientMessageSnapshot[]): Chats[] {
 // ─── Document mapping helpers ───────────────────────────────────────
 
 export function mapKnowledgeDocuments(
-  documents: Awaited<ReturnType<typeof fetchAllAvailableDocuments>>,
+  documents: Awaited<ReturnType<typeof getApplicableDocuments>>,
 ): AgenticKnowledgeDocument[] {
   return documents
     .map((doc) => ({
