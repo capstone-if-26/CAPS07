@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef } from "react"
+import { useState, useEffect, useRef } from "react"
 import Image from "next/image"
 
 type SidebarExpandedProps = {
@@ -8,6 +8,7 @@ type SidebarExpandedProps = {
   onClose: () => void
   activeMenu?: string
   onMenuClick?: (menu: string) => void
+  onLogout?: () => void
 }
 
 const MENU_ITEMS = [
@@ -19,12 +20,10 @@ const MENU_ITEMS = [
 ]
 
 export default function SidebarExpanded({
-  open,
-  onClose,
-  activeMenu = "Overview",
-  onMenuClick,
+  open, onClose, activeMenu = "Overview", onMenuClick, onLogout,
 }: SidebarExpandedProps) {
   const sidebarRef = useRef<HTMLDivElement>(null)
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false)
 
   // Close on outside click
   useEffect(() => {
@@ -214,12 +213,64 @@ export default function SidebarExpanded({
             Pengaturan
           </button>
 
-          <button className="sdraw-bottom-item danger">
+          <button className="sdraw-bottom-item danger" onClick={() => setShowLogoutConfirm(true)}>
             <Image src="/logout.png" alt="logout" width={18} height={18} />
             Keluar
           </button>
         </div>
       </div>
+        {/* Modal konfirmasi logout */}
+        {showLogoutConfirm && (
+          <div
+            onClick={() => setShowLogoutConfirm(false)}
+            style={{
+              position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)",
+              zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center",
+            }}
+          >
+            <div
+              onClick={e => e.stopPropagation()}
+              style={{
+                background: "#fff", borderRadius: 16, padding: "28px 28px 24px",
+                width: 320, maxWidth: "90vw", boxShadow: "0 8px 40px rgba(0,0,0,0.18)",
+                textAlign: "center",
+              }}
+            >
+              <div style={{ fontSize: 17, fontWeight: 700, color: "#8C0000", marginBottom: 12 }}>
+                Keluar
+              </div>
+              <div style={{
+                background: "#fef2f2", borderRadius: 10, padding: "14px 16px", marginBottom: 20,
+              }}>
+                <p style={{ fontSize: 13.5, color: "#374151", lineHeight: 1.6, margin: 0 }}>
+                  Apakah kamu yakin ingin keluar dari dashboard?
+                </p>
+              </div>
+              <div style={{ display: "flex", gap: 10 }}>
+                <button
+                  onClick={() => setShowLogoutConfirm(false)}
+                  style={{
+                    flex: 1, padding: "10px", background: "#fff", color: "#374151",
+                    border: "1.5px solid #e5e7eb", borderRadius: 8,
+                    fontSize: 13.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
+                  }}
+                >
+                  Batal
+                </button>
+                <button
+                  onClick={() => { setShowLogoutConfirm(false); onLogout?.() }}
+                  style={{
+                    flex: 1, padding: "10px", background: "#8C0000", color: "#fff",
+                    border: "none", borderRadius: 8,
+                    fontSize: 13.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
+                  }}
+                >
+                  Keluar
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
     </>
   )
 }
