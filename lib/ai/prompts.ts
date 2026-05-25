@@ -207,6 +207,34 @@ export function getGenerateIntentBasedSummaryPrompt(intent: string, requiredPoin
   return { systemPrompt, userPrompt }
 }
 
+export function getRoutingPrompt(docsContext: string, query: string, longTermMemory: string, shortTermMemory: { role?: string | null; content?: string | null }[]) {
+  const memoryText = longTermMemory
+    ? `Long-term memory:\n${longTermMemory}`
+    : "";
+  const recentMessages = shortTermMemory
+    .slice(-4)
+    .map((m) => `${m.role ?? "user"}: ${m.content ?? ""}`)
+    .join("\n");
+
+  const systemPrompt = `
+    You are a routing assistant for an OJK financial chatbot. Given the user query and available documents, classify the intent and select relevant document namespaces.
+    Output JSON only, no markdown.
+    Schema: {"intent":"general"|"casual"|"business","confidence":number,"reason":string,"needs_namespace_routing":boolean,"namespaces"?:string[]}
+    Rules:
+    - "casual": greetings, small talk, unrelated to finance.
+    - "general": general OJK/financial questions not tied to a specific document.
+    - "business": query is about a specific document/regulation — set needs_namespace_routing=true and list matching namespaces.
+    - reason: at most 8 words.
+    - Only include namespaces that exist in the provided document list.
+  `;
+
+  const userPrompt = `
+    Available documents:\n${docsContext}\n\n${memoryText}\n\nRecent conversation:\n${recentMessages}\n\nUser query: ${query}
+  `;
+
+  return { systemPrompt, userPrompt };
+}
+
 export function getClassifyIntentAndRelevancePrompt(intentList: string, memoryText: string, question: string) {
   const systemPrompt = `
     OJK/financial consumer chatbot — classify conversation intent for summary generation only. Output JSON only, no markdown.
