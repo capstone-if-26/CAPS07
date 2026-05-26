@@ -325,7 +325,7 @@ export default function AdminLoginPage() {
                   type="text"
                   value={email}
                   onChange={(e) => { setEmail(e.target.value); setError(null); setErrorType(null) }}
-                  placeholder="cth. j.doe@perusahaan.com"
+                  placeholder="john.doe@example.com"
                   required
                 />
               </div>

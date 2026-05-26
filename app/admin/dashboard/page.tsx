@@ -1,5 +1,6 @@
 "use client"
 
+import { useRouter } from "next/navigation"
 import { useState, useEffect, useCallback } from "react"
 import SidebarExpanded from "@/components/sidebar-expanded"
 import IntentSesiChatPage from "@/components/intent-sesi-chat"
@@ -19,11 +20,19 @@ type OverviewIntent = {
   percentage: number
 }
 
+type OverviewTrend = {
+  period: string
+  totalChats: number
+  completionRate: number
+  likePercentage: number
+}
+
 type OverviewData = {
   totalChats: number
   completionRate: number
   likePercentage: number
   intents: OverviewIntent[]
+  trend: OverviewTrend[]
 }
 
 // Constants
@@ -212,10 +221,11 @@ type SessionIntentData = {
   }
 }
 
-function SidebarBottomIcon({ src, alt, label }: { src: string; alt: string; label: string }) {
+function SidebarBottomIcon({ src, alt, label, onClick }: { src: string; alt: string; label: string; onClick?: () => void }) {
   const [show, setShow] = useState(false)
   return (
     <div
+      onClick={onClick}
       style={{ position: "relative", width: 36, height: 36, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}
       onMouseEnter={() => setShow(true)}
       onMouseLeave={() => setShow(false)}
@@ -255,26 +265,58 @@ function SidebarBottomIcon({ src, alt, label }: { src: string; alt: string; labe
   )
 }
 // Main Page
+
+type UserSession = {
+  name: string
+  email: string
+  role: string
+}
+
 export default function AdminDashboardPage() {
   const [overview, setOverview] = useState<OverviewData | null>(null)
   const [sessionIntent, setSessionIntent] = useState<SessionIntentData | null>(null)
+  const [overviewTrend, setOverviewTrend] = useState<OverviewTrend[]>([])
   const [loading, setLoading] = useState(true)
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [activeMenu, setActiveMenu] = useState("Overview")
+  const [userSession, setUserSession] = useState<UserSession | null>(null)
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false)
+  const router = useRouter()
+
+const handleLogout = async () => {
+  try {
+    await fetch("/api/auth/sign-out", { method: "POST" })
+    router.push("/admin/login")
+  } catch (e) {
+    console.error("Logout failed", e)
+  }
+}
 
   const fetchAll = useCallback(async () => {
   setLoading(true)
   try {
-    const [overviewRes, sessionRes] = await Promise.all([
+    const [overviewRes, sessionRes, authRes] = await Promise.all([
       fetch(`/api/dashboard/overview?days=30`),
       fetch(`/api/dashboard/session-intent?days=30`),
+      fetch(`/api/auth/get-session`),
     ])
-    const [overviewJson, sessionJson] = await Promise.all([
+    const [overviewJson, sessionJson, authJson] = await Promise.all([
       overviewRes.json(),
       sessionRes.json(),
+      authRes.json(),
     ])
-    if (overviewJson.status) setOverview(overviewJson.data)
+    if (overviewJson.status) {
+      setOverview(overviewJson.data)
+      setOverviewTrend(overviewJson.data.trend ?? [])
+    }
     if (sessionJson.status) setSessionIntent(sessionJson.data)
+    if (authJson?.user) {
+      setUserSession({
+        name: authJson.user.name ?? "Admin",
+        email: authJson.user.email ?? "",
+        role: authJson.user.role ?? "Admin",
+      })
+    }
   } catch (e) {
     console.error("Failed to fetch dashboard data", e)
   } finally {
@@ -315,24 +357,22 @@ useEffect(() => { fetchAll() }, [fetchAll])
 
 
   // Line chart data
-  // /api/dashboard/overview tidak mengembalikan time-series,
-  // line chart tetap pakai dummy sampai ada endpoint time-series khusus
-  const DUMMY_LINE = [
-    { date: "1 Oct",  Session: 80,  Conversion: 60,  CSAT: 75 },
-    { date: "5 Oct",  Session: 110, Conversion: 85,  CSAT: 78 },
-    { date: "10 Oct", Session: 95,  Conversion: 72,  CSAT: 70 },
-    { date: "14 Oct", Session: 130, Conversion: 100, CSAT: 82 },
-    { date: "17 Oct", Session: 150, Conversion: 120, CSAT: 88 },
-    { date: "20 Oct", Session: 170, Conversion: 138, CSAT: 92 },
-    { date: "23 Oct", Session: 140, Conversion: 108, CSAT: 84 },
-    { date: "26 Oct", Session: 160, Conversion: 125, CSAT: 86 },
-    { date: "28 Oct", Session: 125, Conversion: 95,  CSAT: 79 },
-    { date: "30 Oct", Session: 175, Conversion: 140, CSAT: 90 },
-  ]
+  const formatPeriodLabel = (period: string) => {
+    if (/^\d{4}-\d{2}$/.test(period)) {
+      const [y, m] = period.split("-")
+      return new Date(Number(y), Number(m) - 1).toLocaleDateString("id-ID", { month: "short", year: "numeric" })
+    }
+    const d = new Date(period)
+    return d.toLocaleDateString("id-ID", { day: "numeric", month: "short" })
+  }
 
-  const lineData = DUMMY_LINE
-
-    // Top intents table — DUMMY DATA sementara
+  const lineData = overviewTrend.map(d => ({
+    date: formatPeriodLabel(d.period),
+    Session: d.totalChats,
+    Conversion: d.completionRate,
+    CSAT: d.likePercentage,
+  }))
+  
   const topIntentsTable = intents.filter(d => d.intent !== "Lainnya").slice(0, 5).map((item, i) => {
   const avgCount = intents.slice(0, 5).reduce((s, d) => s + d.count, 0) / Math.max(intents.slice(0, 5).length, 1)
   const trendUp = item.count >= avgCount
@@ -352,6 +392,7 @@ useEffect(() => { fetchAll() }, [fetchAll])
           min-height: 100vh;
           background: #f4f5f7;
           font-family: 'DM Sans', sans-serif;
+          overflow: hidden;
         }
 
         /* Sidebar */
@@ -396,22 +437,16 @@ useEffect(() => { fetchAll() }, [fetchAll])
           flex: 1;
           display: flex;
           flex-direction: column;
-          min-height: 100vh;
+          height: 100vh;
+          overflow-y: auto;
         }
 
         .content {
-          padding: 24px 28px;
+          padding: 24px 28px 60px;
           flex: 1;
           margin-top: 57px;
         }
 
-        .dok-table-wrap {
-          background: #fff;
-          border-radius: 14px;
-          box-shadow: 0 1px 6px rgba(0,0,0,0.07);
-          overflow: visible;
-          min-width: 1400px;
-        }
 
         /* Topbar */
         .topbar {
@@ -833,7 +868,7 @@ useEffect(() => { fetchAll() }, [fetchAll])
 
           <div className="sidebar-bottom">
             <SidebarBottomIcon src="/settings.png" alt="settings" label="Pengaturan" />
-            <SidebarBottomIcon src="/logout.png" alt="logout" label="Keluar" />
+            <SidebarBottomIcon src="/logout.png" alt="logout" label="Keluar" onClick={() => setShowLogoutConfirm(true)} />
           </div>
           </aside>
 
@@ -842,6 +877,7 @@ useEffect(() => { fetchAll() }, [fetchAll])
           onClose={() => setSidebarOpen(false)}
           activeMenu={activeMenu}
           onMenuClick={setActiveMenu}
+          onLogout={handleLogout}
         />
 
         {/* Main */}
@@ -874,29 +910,17 @@ useEffect(() => { fetchAll() }, [fetchAll])
             cursor: "pointer",
           }}
         >
-          <div className="user-avatar" >MR</div>
-
-          <div className="user-pill-text" style={{ marginLeft: 8 }}>
-            <div
-              style={{
-                fontSize: 13,
-                fontWeight: 600,
-                color: "#111827",
-                lineHeight: 1.2,
-              }}
-            >
-              Moni Roy
-            </div>
-
-            <div
-              style={{
-              fontSize: 11,
-                color: "#9ca3af",
-              }}
-            >
-              Admin
-            </div>
+          <div className="user-avatar">
+          {userSession?.name ? userSession.name.split(" ").map(w => w[0]).join("").substring(0, 2).toUpperCase() : "AD"}
+        </div>
+        <div className="user-pill-text" style={{ marginLeft: 8 }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: "#111827", lineHeight: 1.2 }}>
+            {userSession?.name ?? "Admin"}
           </div>
+          <div style={{ fontSize: 11, color: "#9ca3af" }}>
+            {userSession?.role ?? "Admin"}
+          </div>
+        </div>
 
           <svg
             className="user-pill-text"
@@ -922,7 +946,7 @@ useEffect(() => { fetchAll() }, [fetchAll])
             ) : activeMenu === "Dokumen" ? (
               <DokumenPage />
             ) : (
-              <>
+            <div style={{ minHeight: "calc(100vh - 110px)" }}>
 
             {/* Stat cards */}
             <div className="stat-row">
@@ -1221,7 +1245,7 @@ useEffect(() => { fetchAll() }, [fetchAll])
               })()} 
             </div>
             </div>
-                 </>
+                 </div>
             )}
           </div>
         </div>
@@ -1246,6 +1270,58 @@ useEffect(() => { fetchAll() }, [fetchAll])
           </button>
         ))}
       </nav>
+      {/* Modal konfirmasi logout */}
+      {showLogoutConfirm && (
+        <div
+          onClick={() => setShowLogoutConfirm(false)}
+          style={{
+            position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)",
+            zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center",
+          }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              background: "#fff", borderRadius: 16, padding: "28px 28px 24px",
+              width: 320, maxWidth: "90vw", boxShadow: "0 8px 40px rgba(0,0,0,0.18)",
+              textAlign: "center",
+            }}
+          >
+            <div style={{ fontSize: 17, fontWeight: 700, color: "#8C0000", marginBottom: 12 }}>
+              Keluar
+            </div>
+            <div style={{
+              background: "#fef2f2", borderRadius: 10, padding: "14px 16px", marginBottom: 20,
+            }}>
+              <p style={{ fontSize: 13.5, color: "#374151", lineHeight: 1.6, margin: 0 }}>
+                Apakah kamu yakin ingin keluar dari dashboard?
+              </p>
+            </div>
+            <div style={{ display: "flex", gap: 10 }}>
+              <button
+                onClick={() => setShowLogoutConfirm(false)}
+                style={{
+                  flex: 1, padding: "10px", background: "#fff", color: "#374151",
+                  border: "1.5px solid #e5e7eb", borderRadius: 8,
+                  fontSize: 13.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
+                }}
+              >
+                Batal
+              </button>
+              <button
+                onClick={() => { setShowLogoutConfirm(false); handleLogout() }}
+                style={{
+                  flex: 1, padding: "10px", background: "#8C0000", color: "#fff",
+                  border: "none", borderRadius: 8,
+                  fontSize: 13.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
+                }}
+              >
+                Keluar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   )
 }

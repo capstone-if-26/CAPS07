@@ -1409,7 +1409,7 @@ export default function DokumenPage() {
     try {
       const params = new URLSearchParams({
         page: String(page),
-        limit: "10",
+        limit: "20",
         ...(search ? { search } : {}),
       });
       const res = await fetch(`/api/documents?${params}`);
@@ -1564,7 +1564,6 @@ export default function DokumenPage() {
           box-shadow: 0 1px 6px rgba(0,0,0,0.07);
           overflow: hidden;
           width: 100%;
-          max-width: 100%;
         }
         .dok-title {
           font-size: 18px;
@@ -1573,8 +1572,8 @@ export default function DokumenPage() {
           padding: 20px 24px 16px;
         }
         .dok-table {
-          min-width: 1400px;
-          width: 1400px;
+          min-width: 1000px;
+          width: 100%;
           border-collapse: collapse;
           font-size: 12.5px;
         }

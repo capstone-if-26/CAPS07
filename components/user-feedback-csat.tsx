@@ -84,7 +84,7 @@ export default function UserFeedbackCSATPage() {
   })
 
   return (
-    <>
+    <div style={{ minHeight: "calc(100vh - 110px)" }}>
       <style>{`
         @keyframes uf-shimmer {
           0% { background-position: 200% 0; }
@@ -377,6 +377,6 @@ export default function UserFeedbackCSATPage() {
           )}
         </div>
       </div>
-    </>
+    </div>
   )
 }
