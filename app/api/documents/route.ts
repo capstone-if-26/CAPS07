@@ -18,7 +18,7 @@ const VALID_DOC_TYPES: Set<string> = new Set([
   "faq",
   "news_event",
   "circular_letter",
-  "attachment"
+  "attachment",
 ]);
 
 export async function GET(req: NextRequest) {
@@ -104,16 +104,14 @@ export async function POST(req: NextRequest) {
     // 6. Ambil metadata opsional
     const documentVersion =
       formData.get("documentVersion")?.toString()?.trim() || undefined;
-    const language =
-      formData.get("language")?.toString()?.trim() || undefined;
+    const language = formData.get("language")?.toString()?.trim() || undefined;
     const securityLevel =
       formData.get("securityLevel")?.toString()?.trim() || undefined;
     const effectiveDate =
       formData.get("effectiveDate")?.toString()?.trim() || undefined;
     const statusDocument =
       formData.get("statusDocument")?.toString()?.trim() || undefined;
-    const status =
-      formData.get("status")?.toString()?.trim() || undefined;
+    const status = formData.get("status")?.toString()?.trim() || undefined;
 
     // 7. Konversi File ke Buffer (harus dilakukan sebelum response dikirim)
     const arrayBuffer = await file.arrayBuffer();
@@ -161,7 +159,11 @@ export async function POST(req: NextRequest) {
       };
 
       const httpStatus = statusMap[error.code] || 500;
-      return buildFailedResponse(error.message, { code: error.code }, httpStatus);
+      return buildFailedResponse(
+        error.message,
+        { code: error.code },
+        httpStatus,
+      );
     }
 
     const message =
