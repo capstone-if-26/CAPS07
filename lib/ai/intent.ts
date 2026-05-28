@@ -5,6 +5,9 @@ import { Chats } from '@/modules/chats/type';
 import { readFile } from 'fs/promises';
 import path from 'path';
 import { getClassifyIntentAndRelevancePrompt, getGenerateIntentBasedSummaryPrompt } from './prompts';
+import { getModuleLogger } from '@/lib/logger';
+
+const log = getModuleLogger('lib/ai/intent');
 
 export const OJK_INTENTS = [
   'Cek Legalitas Pinjol/Investasi',
@@ -29,8 +32,6 @@ export type IntentClassification = {
 };
 
 type IntentRequirementsMap = Record<OjkIntent, string[]>;
-
-const OFF_TOPIC_TEMPLATE = 'Maaf, saya hanya dapat membantu pertanyaan yang relevan dengan OJK, layanan keuangan, perlindungan konsumen, perbankan, investasi, pinjol, SLIK, dan penipuan keuangan. Silakan ajukan pertanyaan yang terkait topik tersebut.';
 
 const SUMMARY_HEADING_TO_INTENT: Record<string, OjkIntent> = {
   'edukasi tentang hak dan pelindungan konsumen di sektor jasa keuangan, termasuk jalur pengaduan melalui APPK/Kontak OJK 157': 'Hak Saya sebagai Konsumen',
@@ -168,7 +169,8 @@ export async function classifyIntentAndRelevance(
       confidence: clampConfidence(Number(parsed.confidence)),
       reason: String(parsed.reason || 'No reason provided by classifier'),
     };
-  } catch {
+  } catch (err) {
+    log.warn({ err }, "intent.classify_fallback_used");
     const fallback = intentClassifierFallback();
     return inferredIntent ? { ...fallback, intent: inferredIntent, confidence: 0.6, reason: 'Heuristic intent match' } : fallback;
   }
@@ -217,7 +219,8 @@ async function loadIntentRequirements(): Promise<IntentRequirementsMap> {
     const markdown = await readFile(filePath, 'utf8');
     cachedRequirements = parseRequirementsMarkdown(markdown);
     return cachedRequirements;
-  } catch {
+  } catch (err) {
+    log.debug({ err }, "intent.requirements_load_failed_using_fallback");
     cachedRequirements = {
       'Cek Legalitas Pinjol/Investasi': ['Nama platform', 'Status legalitas', 'Risiko', 'Langkah verifikasi'],
       'Lapor Penipuan (OJK / IASC)': ['Kronologi kejadian', 'Risiko', 'Tindakan mendesak', 'Channel resmi'],
@@ -290,11 +293,9 @@ export async function generateIntentBasedSummary(
     const summary = stripSummaryMarkdownArtifacts(text.trim());
     const completeSummary = ensureRequiredSummaryPoints(summary, requiredPoints);
     return completeSummary || 'Ringkasan belum tersedia.';
-  } catch {
+  } catch (err) {
+    log.warn({ err, intent }, "intent.summary_generation_failed");
     return 'Ringkasan belum dapat dibuat saat ini. Silakan coba lagi.';
   }
 }
 
-export function getOffTopicTemplate(): string {
-  return OFF_TOPIC_TEMPLATE;
-}

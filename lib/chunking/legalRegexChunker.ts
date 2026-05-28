@@ -9,6 +9,9 @@ import {
   BlockData,
   ChunkData,
 } from "@/types/chunker";
+import { getModuleLogger } from "@/lib/logger";
+
+const log = getModuleLogger("lib/chunking/legalRegexChunker");
 
 export class LegalRegexChunker {
   private readonly sourceInput: string | Buffer;
@@ -167,6 +170,8 @@ export class LegalRegexChunker {
    * Core Processing: Evaluasi State Machine & Chunking
    */
   public async process(): Promise<ChunkData[]> {
+    log.debug({ documentName: this.documentName, fileName: this.fileName, docType: this.docType }, "chunking.legal_process_started");
+
     const fileBuffer = await this.getFileBuffer();
     const fileHash = await this.generateFileHash(fileBuffer);
     const blocks = await this.extractBlocks(fileBuffer);
@@ -275,6 +280,7 @@ export class LegalRegexChunker {
         chunks[i].metadata.next_chunk_id = chunks[i + 1].metadata.chunk_id;
     }
 
+    log.info({ documentName: this.documentName, chunkCount: chunks.length, blockCount: blocks.length }, "chunking.legal_process_completed");
     return chunks;
   }
 }

@@ -3,6 +3,9 @@ import { model } from "@/lib/openrouter";
 import { retrieveRelevantChunks } from "@/lib/pinecone/utils";
 import { stripSummaryMarkdownArtifacts } from "@/lib/format-plain-summary";
 import { z } from "zod";
+import { getModuleLogger } from "@/lib/logger";
+
+const log = getModuleLogger("lib/ai/rag");
 
 import type {
   AgenticQuestion,
@@ -98,12 +101,12 @@ export function createAgenticRagStream(params: AgenticRagStreamParams) {
           const namespacesToUse =
             validNamespaces.length > 0 ? validNamespaces : fallbackNamespaces;
 
-          console.log("[AgenticRAG][ToolCall] retrieve_policy_context", {
+          log.debug({
             query,
             namespacesRequested: namespaces || [],
             namespacesUsed: namespacesToUse,
             topK: requestedTopK || topK,
-          });
+          }, "rag.retrieve_called");
 
           const matches = await retrieveRelevantChunks(
             query,
@@ -181,32 +184,16 @@ export function createAgenticRagStream(params: AgenticRagStreamParams) {
       }),
     },
     onStepFinish: (step) => {
-      console.log("[AgenticRAG][Step]", {
+      log.debug({
         stepNumber: step.stepNumber,
         finishReason: step.finishReason,
-        reasoning: step.reasoningText || null,
-        toolCalls: step.toolCalls.map((toolCall) => ({
-          toolName: toolCall.toolName,
-          input: toolCall.input,
-        })),
-        toolResults: step.toolResults.map((toolResult) => ({
-          toolName: toolResult.toolName,
-          outputSummary:
-            typeof toolResult.output === "object" && toolResult.output !== null
-              ? {
-                  namespacesUsed: (
-                    toolResult.output as { namespacesUsed?: string[] }
-                  ).namespacesUsed,
-                  sourceCount: Array.isArray(
-                    (toolResult.output as { sources?: unknown[] }).sources,
-                  )
-                    ? (toolResult.output as { sources?: unknown[] }).sources
-                        ?.length
-                    : 0,
-                }
-              : toolResult.output,
-        })),
-      });
+        toolCallCount: step.toolCalls.length,
+        toolNames: step.toolCalls.map((tc) => tc.toolName),
+        sourceCount: step.toolResults.reduce((acc, tr) => {
+          const sources = (tr.output as { sources?: unknown[] } | null)?.sources;
+          return acc + (Array.isArray(sources) ? sources.length : 0);
+        }, 0),
+      }, "rag.step_finished");
     },
     onFinish: async ({ text }) => {
       const trimmedText = text.trim();
@@ -357,7 +344,8 @@ export async function generateConversationSummary(
 
     const summary = stripSummaryMarkdownArtifacts(text.trim());
     return summary || params.previousSummary || "";
-  } catch {
+  } catch (err) {
+    log.warn({ err }, "rag.summary_generation_failed");
     return params.previousSummary || "";
   }
 }
@@ -389,6 +377,7 @@ export async function generateQuiz(chats: string) {
 
     return parsedObject.quiz;
   } catch (error) {
+    log.error({ err: error }, "rag.quiz_generation_failed");
     throw new Error(
       `Gagal menghasilkan kuis: ${error instanceof Error ? error.message : "Parsing JSON gagal"}`,
     );

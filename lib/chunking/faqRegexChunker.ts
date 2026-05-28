@@ -10,6 +10,9 @@ import {
   ChunkMetadata,
   ChunkData,
 } from "@/types/chunker";
+import { getModuleLogger } from "@/lib/logger";
+
+const log = getModuleLogger("lib/chunking/faqRegexChunker");
 
 interface ChunkFaqMetadata extends ChunkMetadata {
   question_number?: number;
@@ -153,6 +156,8 @@ export class FAQRegexChunker {
   }
 
   public async process(): Promise<ChunkData[]> {
+    log.debug({ documentName: this.documentName, fileName: this.fileName, docType: this.docType }, "chunking.faq_process_started");
+
     const fileBuffer = await this.getFileBuffer();
     const fileHash = this.generateFileHash(fileBuffer);
     const blocks = await this.extractBlocks(fileBuffer);
@@ -241,6 +246,7 @@ export class FAQRegexChunker {
         chunks[i].metadata.next_chunk_id = chunks[i + 1].metadata.chunk_id;
     }
 
+    log.info({ documentName: this.documentName, chunkCount: chunks.length, qaCount: stateNomor }, "chunking.faq_process_completed");
     return chunks;
   }
 }

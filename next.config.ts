@@ -5,6 +5,9 @@ const nextConfig = {
     "@xenova/transformers",
     "mammoth",
     "pdf-parse",
+    "pino",
+    "pino-pretty",
+    "thread-stream",
   ],
 
   async headers() {

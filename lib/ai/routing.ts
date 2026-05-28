@@ -2,20 +2,10 @@ import { generateText } from "ai";
 import { routingModel } from "@/lib/openrouter";
 import { getRoutingPrompt } from "./prompts";
 import { Chats } from "@/modules/chats/type";
+import { getModuleLogger } from "../logger";
+import { DocumentInfo, RoutingResult } from "./type";
 
-export interface DocumentInfo {
-  name: string;
-  namespace: string;
-  description: string;
-}
-
-export interface RoutingResult {
-  intent: "general" | "casual" | "business";
-  confidence: number;
-  reason: string;
-  needs_namespace_routing: boolean;
-  namespaces?: string[];
-}
+const log = getModuleLogger("lib/ai/routing");
 
 export async function routeIntentAndNamespaces(
   query: string,
@@ -92,7 +82,7 @@ export async function routeIntentAndNamespaces(
       attempt++;
 
       if (attempt > maxRetries) {
-        console.error("LLM Routing failed:", err);
+        log.error({ err, query }, "routing.fallback");
 
         return {
           intent: "general",
