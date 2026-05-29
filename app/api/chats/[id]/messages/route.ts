@@ -1,9 +1,10 @@
 import { getMessageById } from "@/modules/messages/repository";
 import { continueChatStream } from "@/modules/chats/service";
-import { NextRequest } from "next/server";
+import { NextRequest, after } from "next/server";
 import { buildSuccessResponse, buildFailedResponse } from "@/lib/utils/response";
 import { toAgenticEventStreamResponse } from "@/lib/ai/rag";
 import { getModuleLogger } from "@/lib/logger";
+import { insertApiRequestLog } from "@/modules/dashboard/repository";
 
 const log = getModuleLogger("api/chats/[id]/messages");
 
@@ -55,19 +56,63 @@ export async function POST(
     }
 
     if (!question) {
-      reqLog.warn({ status: 400, duration: Date.now() - start }, "chat.continue_rejected");
+      const duration = Date.now() - start;
+      reqLog.warn({ status: 400, duration }, "chat.continue_rejected");
+      after(async () => {
+        await insertApiRequestLog({
+          endpoint: "chat",
+          chatId,
+          requestId,
+          method: "POST",
+          statusCode: 400,
+          durationMs: duration,
+          isError: false,
+        }).catch(() => {});
+      });
       return buildFailedResponse("Pertanyaan (question/messages) diperlukan", null, 400);
     }
 
     reqLog.info({ questionLength: question.length }, "chat.continue_initiated");
     const result = await continueChatStream(chatId, question);
+    const duration = Date.now() - start;
 
-    reqLog.info({ chatId: result.chatId, status: 200, duration: Date.now() - start }, "chat.continue_started");
+    reqLog.info({ chatId: result.chatId, status: 200, duration }, "chat.continue_started");
+
+    // Await the insert before returning the stream. The insert is fast (< 50ms)
+    // and the function stays alive for the full stream duration, so this is safe.
+    // Using await (not after() or fire-and-forget) guarantees the write completes.
+    try {
+      await insertApiRequestLog({
+        endpoint: "chat",
+        chatId,
+        requestId,
+        method: "POST",
+        statusCode: 200,
+        durationMs: duration,
+        isError: false,
+      });
+    } catch (logErr) {
+      reqLog.warn({ err: logErr }, "api_log.write_failed");
+    }
+
     return toAgenticEventStreamResponse(result.streamResult, {
       "x-chat-id": result.chatId,
     });
   } catch (error: unknown) {
-    reqLog.error({ err: error, status: 500, duration: Date.now() - start }, "chat.continue_failed");
+    const duration = Date.now() - start;
+    reqLog.error({ err: error, status: 500, duration }, "chat.continue_failed");
+    after(async () => {
+      await insertApiRequestLog({
+        endpoint: "chat",
+        chatId,
+        requestId,
+        method: "POST",
+        statusCode: 500,
+        durationMs: duration,
+        isError: true,
+        errorMessage: error instanceof Error ? error.message : "Unknown error",
+      }).catch(() => {});
+    });
     const message = error instanceof Error ? error.message : "Terjadi kesalahan internal";
     return buildFailedResponse(message, error, 500);
   }

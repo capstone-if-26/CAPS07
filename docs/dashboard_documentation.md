@@ -11,6 +11,7 @@ Dokumen ini menjelaskan seluruh endpoint API pada modul dashboard analitik OJK C
 | `GET /api/dashboard/overview` | Ringkasan KPI + tren waktu |
 | `GET /api/dashboard/session-intent` | Analisis sesi, distribusi intent, dan word cloud |
 | `GET /api/dashboard/feedback` | CSAT keseluruhan, per intent, dan tren waktu |
+| `GET /api/dashboard/performance` | Waktu respons rata-rata, error rate, dan tren performa per endpoint AI |
 
 ---
 
@@ -275,6 +276,134 @@ Menggunakan filter waktu standar di atas.
 | `period` | Label periode sesuai granularitas (lihat tabel Filter Waktu di atas) |
 | `likes` | Jumlah *like* pada periode tersebut |
 | `dislikes` | Jumlah *dislike* pada periode tersebut |
+
+---
+
+## 4. GET `/api/dashboard/performance`
+
+Mengambil data performa teknis endpoint AI utama: waktu respons rata-rata (keseluruhan dan per endpoint), *error rate*, dan tren waktu. Digunakan untuk memantau kesehatan sistem dan mengidentifikasi degradasi performa.
+
+### Query Parameters
+
+Menggunakan filter waktu standar di atas.
+
+### Success Response — `200 OK`
+
+```json
+{
+  "status": true,
+  "message": "Berhasil mengambil data performa",
+  "data": {
+    "summary": {
+      "totalRequests": 318,
+      "avgResponseMs": 1240,
+      "p50Ms": 980,
+      "p95Ms": 3850,
+      "errorCount": 7,
+      "errorRate": 2.20
+    },
+    "byEndpoint": [
+      {
+        "endpoint": "new_chat",
+        "label": "Chat Baru",
+        "totalRequests": 142,
+        "avgResponseMs": 1580,
+        "p95Ms": 4200,
+        "errorCount": 3,
+        "errorRate": 2.11
+      },
+      {
+        "endpoint": "existing_chat",
+        "label": "Chat Lanjutan",
+        "totalRequests": 98,
+        "avgResponseMs": 1320,
+        "p95Ms": 3600,
+        "errorCount": 2,
+        "errorRate": 2.04
+      },
+      {
+        "endpoint": "quiz",
+        "label": "Quiz",
+        "totalRequests": 44,
+        "avgResponseMs": 920,
+        "p95Ms": 2100,
+        "errorCount": 1,
+        "errorRate": 2.27
+      },
+      {
+        "endpoint": "summary",
+        "label": "Ringkasan",
+        "totalRequests": 34,
+        "avgResponseMs": 740,
+        "p95Ms": 1800,
+        "errorCount": 1,
+        "errorRate": 2.94
+      }
+    ],
+    "trend": [
+      {
+        "period": "2026-04-23",
+        "avgResponseMs": 1150,
+        "requestCount": 18,
+        "errorCount": 0,
+        "errorRate": 0.00
+      },
+      {
+        "period": "2026-04-24",
+        "avgResponseMs": 1380,
+        "requestCount": 21,
+        "errorCount": 1,
+        "errorRate": 4.76
+      }
+    ]
+  }
+}
+```
+
+### Keterangan Field
+
+**`summary` (agregat keseluruhan)**
+
+| Field | Deskripsi |
+| :--- | :--- |
+| `totalRequests` | Total request yang dicatat dalam rentang waktu |
+| `avgResponseMs` | Rata-rata waktu respons seluruh endpoint dalam milidetik |
+| `p50Ms` | Persentil ke-50 (median) waktu respons dalam milidetik |
+| `p95Ms` | Persentil ke-95 waktu respons dalam milidetik — indikator kasus lambat |
+| `errorCount` | Jumlah request yang menghasilkan status HTTP 5xx |
+| `errorRate` | Persentase error: `errorCount / totalRequests × 100`, dibulatkan 2 desimal. `0` jika belum ada request |
+
+**`byEndpoint[]` (per endpoint)**
+
+| Field | Deskripsi |
+| :--- | :--- |
+| `endpoint` | Kunci internal endpoint (lihat tabel di bawah) |
+| `label` | Nama tampilan endpoint dalam Bahasa Indonesia |
+| `totalRequests` | Total request untuk endpoint tersebut |
+| `avgResponseMs` | Rata-rata waktu respons untuk endpoint tersebut dalam milidetik |
+| `p95Ms` | Persentil ke-95 waktu respons untuk endpoint tersebut |
+| `errorCount` | Jumlah request error untuk endpoint tersebut |
+| `errorRate` | Persentase error untuk endpoint tersebut, formula sama dengan `summary.errorRate` |
+
+**Endpoint yang dipantau:**
+
+| `endpoint` | `label` | Catatan durasi |
+| :--- | :--- | :--- |
+| `chat` | Chat | Durasi = TTFB (waktu hingga stream dimulai, bukan selesai). Mencakup POST `/api/chats` (chat baru) dan POST `/api/chats/[id]` (chat lanjutan) |
+| `quiz` | Quiz | Durasi = waktu pemrosesan penuh hingga respons selesai |
+| `summary` | Ringkasan | Durasi = waktu pemrosesan penuh hingga respons selesai |
+
+**`trend[]` (per periode)**
+
+| Field | Deskripsi |
+| :--- | :--- |
+| `period` | Label periode sesuai granularitas (lihat tabel Filter Waktu di atas) |
+| `avgResponseMs` | Rata-rata waktu respons semua endpoint pada periode tersebut |
+| `requestCount` | Total request pada periode tersebut |
+| `errorCount` | Jumlah request error pada periode tersebut |
+| `errorRate` | Persentase error pada periode tersebut |
+
+> **Catatan durasi:** Untuk endpoint streaming (`chat`), `duration_ms` mencatat *Time to First Byte* (TTFB) — yaitu waktu dari request masuk hingga stream pertama dikirim ke klien, bukan hingga seluruh stream selesai. Untuk endpoint non-streaming (`quiz`, `summary`), `duration_ms` mencatat waktu pemrosesan penuh.
 
 ---
 

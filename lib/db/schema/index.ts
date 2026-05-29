@@ -4,3 +4,4 @@ export * from './chats';
 export * from './messages';
 export * from './message_feedbacks';
 export * from './documents';
+export * from './api_request_logs';

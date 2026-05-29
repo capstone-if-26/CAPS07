@@ -1,17 +1,20 @@
-import { ScoredPineconeRecord, RecordMetadata } from '@pinecone-database/pinecone';
-import { formatSourceListingLine } from '@/lib/format-source-title';
-import { Chats } from '@/modules/chats/type';
+import {
+  ScoredPineconeRecord,
+  RecordMetadata,
+} from "@pinecone-database/pinecone";
+import { formatSourceListingLine } from "@/lib/format-source-title";
+import { Chats } from "@/modules/chats/type";
 import type {
   AgenticQuestion,
   AgenticRagStreamEvent,
   AgenticKnowledgeDocument,
   RetrievedMatch,
-} from './type';
+} from "./type";
 
 // ─── Namespace helpers ──────────────────────────────────────────────
 
 export function normalizeNamespaces(values: string[]): string[] {
-  return Array.from(new Set(values.map(v => v.trim()).filter(Boolean)));
+  return Array.from(new Set(values.map((v) => v.trim()).filter(Boolean)));
 }
 
 // ─── Match helpers ──────────────────────────────────────────────────
@@ -33,38 +36,46 @@ export function dedupeMatches(matches: RetrievedMatch[]): RetrievedMatch[] {
 
 export function formatRetrievedContext(
   matches: ScoredPineconeRecord<RecordMetadata>[],
-  maxCharsPerChunk: number = 1800,
-  citationIndexByChunkId?: Map<string, number>
+  citationIndexByChunkId?: Map<string, number>,
 ): string {
   return matches
     .map((m, index) => {
       const md = m.metadata || {};
       const score = (m.score || 0).toFixed(4);
 
-    const text = String(md.text || '').substring(0, maxCharsPerChunk);
+      const text = String(md.text || "");
 
       const sourceBits: string[] = [];
 
-    const keysToExtract = ["document_name", "section_path", "chunk_type", "effective_date"];
-    for (const key of keysToExtract) {
-      if (md[key]) {
-        sourceBits.push(`${key}=${md[key]}`);
+      const keysToExtract = [
+        "document_name",
+        "section_path",
+        "chunk_type",
+        "effective_date",
+      ];
+      for (const key of keysToExtract) {
+        if (md[key]) {
+          sourceBits.push(`${key}=${md[key]}`);
+        }
       }
-    }
 
-    const citationNumber = citationIndexByChunkId?.get(m.id) || (index + 1);
+      const citationNumber = citationIndexByChunkId?.get(m.id) || index + 1;
 
-    return `[${citationNumber}] score=${score}\nchunk_id=${m.id}\n${sourceBits.join(' | ')}\n${text}`;
-  }).join('\n\n');
+      return `[${citationNumber}] score=${score}\nchunk_id=${m.id}\n${sourceBits.join(" | ")}\n${text}`;
+    })
+    .join("\n\n");
 }
 
 // ─── Reference appendix ────────────────────────────────────────────
 
 export function buildReferenceAppendix(
   answerText: string,
-  citationMatchMap: Map<number, RetrievedMatch>
+  citationMatchMap: Map<number, RetrievedMatch>,
 ): string {
-  if (/(^|\n)Referensi\s*:/i.test(answerText) && /-\s*\[\d+\]/.test(answerText)) {
+  if (
+    /(^|\n)Referensi\s*:/i.test(answerText) &&
+    /-\s*\[\d+\]/.test(answerText)
+  ) {
     return answerText;
   }
 
@@ -88,14 +99,16 @@ export function buildReferenceAppendix(
       const match = citationMatchMap.get(citationNumber);
       if (!match) return null;
 
-      const documentName = String(match.metadata.document_name || 'Dokumen Internal OJK');
-      const sectionPath = String(match.metadata.section_path || '-');
-      const chunkType = String(match.metadata.chunk_type || '-');
+      const documentName = String(
+        match.metadata.document_name || "Dokumen Internal OJK",
+      );
+      const sectionPath = String(match.metadata.section_path || "-");
+      const chunkType = String(match.metadata.chunk_type || "-");
 
       return `- [${citationNumber}] ${documentName} | section: ${sectionPath} | type: ${chunkType}`;
     })
     .filter(Boolean)
-    .join('\n');
+    .join("\n");
 
   if (!referenceLines) {
     return answerText;
@@ -108,24 +121,29 @@ export function buildReferenceAppendix(
 
 export function buildDocsCatalog(docs: AgenticKnowledgeDocument[]): string {
   if (docs.length === 0) {
-    return '- Belum ada dokumen yang terdaftar.';
+    return "- Belum ada dokumen yang terdaftar.";
   }
 
   return docs
     .map((doc, index) => {
       return `${index + 1}. namespace=${doc.namespace}\n   name=${doc.name}\n   description=${doc.description}`;
     })
-    .join('\n');
+    .join("\n");
 }
 
-export function buildShortTermMemoryString(shortTermMemory: Chats[] | []): string {
+export function buildShortTermMemoryString(
+  shortTermMemory: Chats[] | [],
+): string {
   if (!shortTermMemory.length) {
-    return 'Belum ada pesan terbaru.';
+    return "Belum ada pesan terbaru.";
   }
 
   return shortTermMemory
-    .map((message) => `${message.senderType ?? 'unknown'}: ${message.content ?? ''}`)
-    .join('\n');
+    .map(
+      (message) =>
+        `${message.senderType ?? "unknown"}: ${message.content ?? ""}`,
+    )
+    .join("\n");
 }
 
 // ─── Question tool helpers ──────────────────────────────────────────
@@ -142,36 +160,66 @@ export function shouldForceQuestionTool(question: string): boolean {
   const generalExplanationPattern =
     /\b(apa itu|jelaskan|definisi|contoh modus|tips|edukasi|literasi|peraturan|regulasi|pasal|syarat|prosedur umum)\b/i;
 
-  return personalCasePattern.test(normalizedQuestion) && !generalExplanationPattern.test(normalizedQuestion);
+  return (
+    personalCasePattern.test(normalizedQuestion) &&
+    !generalExplanationPattern.test(normalizedQuestion)
+  );
 }
 
+export function shouldForceRetrieveTool(question: string): boolean {
+  const normalizedQuestion = question.toLowerCase();
+
+  if (/^jawaban untuk pertanyaan\b/i.test(normalizedQuestion)) {
+    return false;
+  }
+
+  // Indikator bahwa user menanyakan STATUS LEGALITAS suatu platform/perusahaan.
+  const legalityPattern =
+    /\b(legal|ilegal|illegal|resmi|terdaftar|tidak terdaftar|berizin|tidak berizin|berlisensi|lisensi|diawasi ojk|diawasi oleh ojk|pengawasan ojk|aman|abal-abal|bodong|palsu|asli)\b/i;
+
+  // Indikator bahwa yang ditanya adalah sebuah ENTITAS (platform/perusahaan/aplikasi/pinjol).
+  const entityPattern =
+    /\b(platform|perusahaan|aplikasi|aplikasinya|fintech|pinjol|pinjaman online|p2p|peer to peer|lembaga|penyelenggara|layanan|jasa keuangan|investasi|broker|sekuritas|asuransi|koperasi)\b/i;
+
+  // Pola eksplisit "apakah X (legal/resmi/terdaftar/...)" walau entitas tidak pakai kata kunci di atas.
+  const explicitQuestionPattern =
+    /\b(apakah|apa)\b.*\b(legal|ilegal|illegal|resmi|terdaftar|berizin|berlisensi|diawasi ojk|aman|bodong|abal-abal)\b/i;
+
+  return (
+    explicitQuestionPattern.test(normalizedQuestion) ||
+    (legalityPattern.test(normalizedQuestion) &&
+      entityPattern.test(normalizedQuestion))
+  );
+}
 
 export function createQuestionId(question: string): string {
   const slug = question
     .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-|-$/g, '')
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "")
     .slice(0, 32);
 
-  return `question-${slug || 'follow-up'}-${Date.now().toString(36)}`;
+  return `question-${slug || "follow-up"}-${Date.now().toString(36)}`;
 }
 
-export function normalizeQuestionToolInput(input: unknown): AgenticQuestion | null {
-  if (typeof input !== 'object' || input === null) return null;
+export function normalizeQuestionToolInput(
+  input: unknown,
+): AgenticQuestion | null {
+  if (typeof input !== "object" || input === null) return null;
 
   const value = input as {
     question?: unknown;
     options?: unknown;
     customOptionLabel?: unknown;
   };
-  const question = String(value.question || '').trim();
+  const question = String(value.question || "").trim();
   if (!question) return null;
 
   const options = Array.isArray(value.options)
     ? value.options
         .map((option, index) => ({
           id: `option-${index + 1}`,
-          label: String(option || '').trim(),
+          label: String(option || "").trim(),
         }))
         .filter((option) => option.label.length > 0)
         .slice(0, 4)
@@ -179,13 +227,15 @@ export function normalizeQuestionToolInput(input: unknown): AgenticQuestion | nu
 
   if (options.length === 0) return null;
 
-  const customOptionLabel = String(value.customOptionLabel || 'Tulis jawaban kamu').trim();
+  const customOptionLabel = String(
+    value.customOptionLabel || "Tulis jawaban kamu",
+  ).trim();
 
   return {
     id: createQuestionId(question),
     question,
     options,
-    customOptionLabel: customOptionLabel || 'Tulis jawaban kamu',
+    customOptionLabel: customOptionLabel || "Tulis jawaban kamu",
   };
 }
 
@@ -198,11 +248,11 @@ export function formatAgenticEvent(event: AgenticRagStreamEvent): Uint8Array {
 }
 
 export function getToolQuery(input: unknown): string {
-  if (typeof input === 'object' && input !== null && 'query' in input) {
-    return String((input as { query?: unknown }).query || '');
+  if (typeof input === "object" && input !== null && "query" in input) {
+    return String((input as { query?: unknown }).query || "");
   }
 
-  return '';
+  return "";
 }
 
 export function getQuestionEvent(input: unknown): AgenticRagStreamEvent | null {
@@ -210,13 +260,13 @@ export function getQuestionEvent(input: unknown): AgenticRagStreamEvent | null {
   if (!question) return null;
 
   return {
-    type: 'question',
+    type: "question",
     question,
   };
 }
 
 export function getSourceEvents(output: unknown): AgenticRagStreamEvent[] {
-  if (typeof output !== 'object' || output === null || !('sources' in output)) {
+  if (typeof output !== "object" || output === null || !("sources" in output)) {
     return [];
   }
 
@@ -226,7 +276,7 @@ export function getSourceEvents(output: unknown): AgenticRagStreamEvent[] {
   }
 
   return sources.flatMap((source) => {
-    if (typeof source !== 'object' || source === null) return [];
+    if (typeof source !== "object" || source === null) return [];
 
     const item = source as {
       citation?: unknown;
@@ -236,26 +286,28 @@ export function getSourceEvents(output: unknown): AgenticRagStreamEvent[] {
       chunkIndex?: unknown;
       textPreview?: unknown;
     };
-    const citation = String(item.citation || '');
-    const documentName = String(item.documentName || 'Dokumen Internal OJK');
-    const sectionPath = String(item.sectionPath || '');
-    const chunkType = String(item.chunkType || '');
+    const citation = String(item.citation || "");
+    const documentName = String(item.documentName || "Dokumen Internal OJK");
+    const sectionPath = String(item.sectionPath || "");
+    const chunkType = String(item.chunkType || "");
     const chunkIndex = item.chunkIndex;
-    const textPreview = String(item.textPreview || '');
+    const textPreview = String(item.textPreview || "");
 
-    return [{
-      type: 'source' as const,
-      source: {
-        href: '#',
-        title: formatSourceListingLine(citation, {
-          documentName,
-          sectionPath,
-          chunkType,
-          chunkIndex: chunkIndex as string | number | null | undefined,
-          textPreview,
-        }),
+    return [
+      {
+        type: "source" as const,
+        source: {
+          href: "#",
+          title: formatSourceListingLine(citation, {
+            documentName,
+            sectionPath,
+            chunkType,
+            chunkIndex: chunkIndex as string | number | null | undefined,
+            textPreview,
+          }),
+        },
       },
-    }];
+    ];
   });
 }
 
@@ -263,11 +315,13 @@ export function getSourceEvents(output: unknown): AgenticRagStreamEvent[] {
 
 export function checkIfResolved(answer: string): boolean {
   if (!answer) return false;
-  
+
   // Deteksi tautan HTTP/HTTPS, WA (wa.me atau format nomor tertentu), dan Email
   const urlRegex = /https?:\/\/[^\s]+/i;
   const waRegex = /wa\.me\/|081-157-157-157/i;
   const emailRegex = /mailto:|[\w.-]+@[\w.-]+\.\w+/i;
-  
-  return urlRegex.test(answer) || waRegex.test(answer) || emailRegex.test(answer);
+
+  return (
+    urlRegex.test(answer) || waRegex.test(answer) || emailRegex.test(answer)
+  );
 }

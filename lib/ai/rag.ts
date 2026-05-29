@@ -27,13 +27,17 @@ import {
   getToolQuery,
   getQuestionEvent,
   getSourceEvents,
+  shouldForceRetrieveTool,
 } from "./utils";
 import {
   getAgenticRagPrompt,
   getCreateQuizPrompt,
   getGenerateConversationSummaryPrompt,
 } from "./prompts";
-import { ASK_USER_QUESTION_TOOL_DESCRIPTION, RETRIEVE_POLICY_CONTEXT_DESCRIPTION } from "./constants";
+import {
+  ASK_USER_QUESTION_TOOL_DESCRIPTION,
+  RETRIEVE_POLICY_CONTEXT_DESCRIPTION,
+} from "./constants";
 
 export type {
   AgenticRagStreamEvent,
@@ -66,6 +70,8 @@ export function createAgenticRagStream(params: AgenticRagStreamParams) {
   const citationMatchMap = new Map<number, RetrievedMatch>();
   let nextCitationIndex = 1;
   const forceQuestionTool = shouldForceQuestionTool(params.question);
+  const forceRetrieveTool =
+    !forceQuestionTool && shouldForceRetrieveTool(params.question);
 
   const { systemPrompt, userPrompt } = getAgenticRagPrompt(
     params.longTermMemory,
@@ -85,7 +91,9 @@ export function createAgenticRagStream(params: AgenticRagStreamParams) {
     stopWhen: forceQuestionTool ? stepCountIs(1) : stepCountIs(4),
     toolChoice: forceQuestionTool
       ? { type: "tool", toolName: "ask_user_question" }
-      : "auto",
+      : forceRetrieveTool
+        ? { type: "tool", toolName: "retrieve_policy_context" }
+        : "auto",
     tools: {
       retrieve_policy_context: tool({
         description: RETRIEVE_POLICY_CONTEXT_DESCRIPTION,
@@ -101,12 +109,15 @@ export function createAgenticRagStream(params: AgenticRagStreamParams) {
           const namespacesToUse =
             validNamespaces.length > 0 ? validNamespaces : fallbackNamespaces;
 
-          log.debug({
-            query,
-            namespacesRequested: namespaces || [],
-            namespacesUsed: namespacesToUse,
-            topK: requestedTopK || topK,
-          }, "rag.retrieve_called");
+          log.debug(
+            {
+              query,
+              namespacesRequested: namespaces || [],
+              namespacesUsed: namespacesToUse,
+              topK: requestedTopK || topK,
+            },
+            "rag.retrieve_called",
+          );
 
           const matches = await retrieveRelevantChunks(
             query,
@@ -139,7 +150,6 @@ export function createAgenticRagStream(params: AgenticRagStreamParams) {
               citationNumber,
               citation: `[${citationNumber}]`,
               chunkId: match.id,
-              score: Number(match.score.toFixed(4)),
               documentName: String(match.metadata.document_name || ""),
               sectionPath: String(match.metadata.section_path || ""),
               chunkType: String(match.metadata.chunk_type || ""),
@@ -152,11 +162,7 @@ export function createAgenticRagStream(params: AgenticRagStreamParams) {
 
           return {
             namespacesUsed: namespacesToUse,
-            context: formatRetrievedContext(
-              matches,
-              1800,
-              citationIndexByChunkId,
-            ),
+            context: formatRetrievedContext(matches, citationIndexByChunkId),
             sources: sourcesWithCitation,
           };
         },
@@ -184,16 +190,20 @@ export function createAgenticRagStream(params: AgenticRagStreamParams) {
       }),
     },
     onStepFinish: (step) => {
-      log.debug({
-        stepNumber: step.stepNumber,
-        finishReason: step.finishReason,
-        toolCallCount: step.toolCalls.length,
-        toolNames: step.toolCalls.map((tc) => tc.toolName),
-        sourceCount: step.toolResults.reduce((acc, tr) => {
-          const sources = (tr.output as { sources?: unknown[] } | null)?.sources;
-          return acc + (Array.isArray(sources) ? sources.length : 0);
-        }, 0),
-      }, "rag.step_finished");
+      log.debug(
+        {
+          stepNumber: step.stepNumber,
+          finishReason: step.finishReason,
+          toolCallCount: step.toolCalls.length,
+          toolNames: step.toolCalls.map((tc) => tc.toolName),
+          sourceCount: step.toolResults.reduce((acc, tr) => {
+            const sources = (tr.output as { sources?: unknown[] } | null)
+              ?.sources;
+            return acc + (Array.isArray(sources) ? sources.length : 0);
+          }, 0),
+        },
+        "rag.step_finished",
+      );
     },
     onFinish: async ({ text }) => {
       const trimmedText = text.trim();

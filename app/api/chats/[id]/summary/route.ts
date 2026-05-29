@@ -1,7 +1,8 @@
-import { NextRequest } from "next/server";
+import { NextRequest, after } from "next/server";
 import { buildFailedResponse, buildSuccessResponse } from "@/lib/utils/response";
 import { generateChatIntentSummary, normalizeClientMessageSnapshot } from "@/modules/chats/service";
 import { getModuleLogger } from "@/lib/logger";
+import { insertApiRequestLog } from "@/modules/dashboard/repository";
 
 const log = getModuleLogger("api/chats/[id]/summary");
 
@@ -18,7 +19,8 @@ export async function POST(
 
   try {
     if (!chatId) {
-      reqLog.warn({ status: 400, duration: Date.now() - start }, "chat.summary_rejected");
+      const duration = Date.now() - start;
+      reqLog.warn({ status: 400, duration }, "chat.summary_rejected");
       return buildFailedResponse("Chat ID diperlukan", null, 400);
     }
 
@@ -35,11 +37,20 @@ export async function POST(
     }
 
     const result = await generateChatIntentSummary(chatId, { clientMessages });
+    const duration = Date.now() - start;
 
-    reqLog.info({ intent: result.intent, status: 200, duration: Date.now() - start }, "chat.summary_generated");
+    reqLog.info({ intent: result.intent, status: 200, duration }, "chat.summary_generated");
+    after(async () => {
+      await insertApiRequestLog({ endpoint: "summary", chatId, requestId, method: "POST", statusCode: 200, durationMs: duration, isError: false }).catch(() => {});
+    });
+
     return buildSuccessResponse(result, "Ringkasan intent berhasil dibuat", 200);
   } catch (error: unknown) {
-    reqLog.error({ err: error, status: 500, duration: Date.now() - start }, "chat.summary_failed");
+    const duration = Date.now() - start;
+    reqLog.error({ err: error, status: 500, duration }, "chat.summary_failed");
+    after(async () => {
+      await insertApiRequestLog({ endpoint: "summary", chatId, requestId, method: "POST", statusCode: 500, durationMs: duration, isError: true, errorMessage: error instanceof Error ? error.message : "Unknown error" }).catch(() => {});
+    });
     const message = error instanceof Error ? error.message : "Terjadi kesalahan internal";
     return buildFailedResponse(message, error, 500);
   }

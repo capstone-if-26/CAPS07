@@ -90,11 +90,11 @@ export function getAgenticRagPrompt(
     - If you mention the OJK WhatsApp number 081-157-157-157, always pair it with the wa.me link above.
     - Do not mention the contact number without the link when giving contact information.
 
-    Fintech lending legality policy:
-    - YOU MUST search first using tool retrieve_policy_context because there are a few document that has information about it.
+    Fintech lending or 'pinjol' legality policy:
+    - YOU MUST USE TOOL retrieve_policy_context because there are a few document that has information about it and use fintech-lending-legal-... and fintech-lending-legal-... namespace.
     - Any user question asking whether a fintech lending / pinjol service is legal, illegal, registered, licensed, resmi, terdaftar, diawasi OJK, or aman must ALWAYS include this exact manual checking link in the last sentence:
       https://www.ojk.go.id/id/kanal/iknb/data-dan-statistik/direktori/fintech/Default.aspx
-    - This requirement applies even if the assistant already knows or states the legality status.
+    - This requirement applies even if the assistant already knows or states the legality status even if there is no information in relevant context.
     - The link must be included directly in the final response, not implied indirectly through phrases like "cek di website OJK".
     - Do not replace the link with another OJK page.
 
@@ -108,10 +108,10 @@ export function getAgenticRagPrompt(
       - Prefer natural Indonesian phrasing over rigid formal wording.
     - Briefly acknowledge the user's concern before giving guidance.
     - Never reveal chain-of-thought, internal planning, or tool mechanics.
-    - If relevant context still does not contain the answer, reply exactly: "Saya tidak dapat menemukan informasi tersebut dalam dokumen kebijakan yang tersedia."
     - If you used retrieved context, cite the document name.
     - From long-term memory, short-term memory, and your recent answer, give the recommended action/question suggestion or offering to do a quiz in menu.
     - Do not include a "Referensi" section in the answer. Source details are rendered separately by the interface.
+    - If relevant context still does not contain the answer, reply exactly: "Saya tidak dapat menemukan informasi tersebut dalam dokumen kebijakan yang tersedia."
     `;
 
   const userPrompt = `
@@ -175,7 +175,11 @@ export function getCreateQuizPrompt(chats: string) {
   return { systemPrompt, userPrompt };
 }
 
-export function getGenerateIntentBasedSummaryPrompt(intent: string, requiredPointsText: string, conversation: string) {
+export function getGenerateIntentBasedSummaryPrompt(
+  intent: string,
+  requiredPointsText: string,
+  conversation: string,
+) {
   const systemPrompt = `
     You generate concise Indonesian summaries for OJK chatbot conversations.
 
@@ -204,10 +208,15 @@ export function getGenerateIntentBasedSummaryPrompt(intent: string, requiredPoin
     If there is no evidence for a point, write "Tidak dibahas dalam percakapan." for that point.
   `;
 
-  return { systemPrompt, userPrompt }
+  return { systemPrompt, userPrompt };
 }
 
-export function getRoutingPrompt(docsContext: string, query: string, longTermMemory: string, shortTermMemory: { role?: string | null; content?: string | null }[]) {
+export function getRoutingPrompt(
+  docsContext: string,
+  query: string,
+  longTermMemory: string,
+  shortTermMemory: { role?: string | null; content?: string | null }[],
+) {
   const memoryText = longTermMemory
     ? `Long-term memory:\n${longTermMemory}`
     : "";
@@ -235,7 +244,11 @@ export function getRoutingPrompt(docsContext: string, query: string, longTermMem
   return { systemPrompt, userPrompt };
 }
 
-export function getClassifyIntentAndRelevancePrompt(intentList: string, memoryText: string, question: string) {
+export function getClassifyIntentAndRelevancePrompt(
+  intentList: string,
+  memoryText: string,
+  question: string,
+) {
   const systemPrompt = `
     OJK/financial consumer chatbot — classify conversation intent for summary generation only. Output JSON only, no markdown.
     Schema: {"intent":string,"isOjkRelevant":boolean,"confidence":number,"reason":string}
@@ -255,5 +268,5 @@ export function getClassifyIntentAndRelevancePrompt(intentList: string, memoryTe
     Context:\n${memoryText}\n\nQuestion:\n${question}
   `;
 
-  return { systemPrompt, userPrompt }
+  return { systemPrompt, userPrompt };
 }

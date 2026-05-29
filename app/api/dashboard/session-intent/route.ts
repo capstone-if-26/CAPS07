@@ -1,7 +1,10 @@
 import { NextRequest } from "next/server";
-import { buildFailedResponse, buildSuccessResponse } from "@/lib/utils/response";
+import {
+  buildFailedResponse,
+  buildSuccessResponse,
+} from "@/lib/utils/response";
 import { getDashboardSessionIntent } from "@/modules/dashboard/service";
-import { DashboardOverviewParams } from "@/modules/dashboard/repository";
+import { DashboardOverviewParams } from "@/modules/dashboard/type";
 import { getModuleLogger } from "@/lib/logger";
 
 const log = getModuleLogger("api/dashboard/session-intent");
@@ -9,7 +12,11 @@ const log = getModuleLogger("api/dashboard/session-intent");
 export async function GET(req: NextRequest) {
   const start = Date.now();
   const requestId = req.headers.get("x-request-id") ?? "unknown";
-  const reqLog = log.child({ request_id: requestId, method: "GET", path: "/api/dashboard/session-intent" });
+  const reqLog = log.child({
+    request_id: requestId,
+    method: "GET",
+    path: "/api/dashboard/session-intent",
+  });
 
   reqLog.debug({}, "dashboard.session_intent_requested");
 
@@ -22,11 +29,22 @@ export async function GET(req: NextRequest) {
     const params: DashboardOverviewParams = { days, year, month };
     const data = await getDashboardSessionIntent(params);
 
-    reqLog.info({ days, year, month, status: 200, duration: Date.now() - start }, "dashboard.session_intent_fetched");
-    return buildSuccessResponse(data, "Berhasil mengambil data sesi dan intent", 200);
+    reqLog.info(
+      { days, year, month, status: 200, duration: Date.now() - start },
+      "dashboard.session_intent_fetched",
+    );
+    return buildSuccessResponse(
+      data,
+      "Berhasil mengambil data sesi dan intent",
+      200,
+    );
   } catch (error: unknown) {
-    reqLog.error({ err: error, status: 500, duration: Date.now() - start }, "dashboard.session_intent_failed");
-    const message = error instanceof Error ? error.message : "Terjadi kesalahan internal";
+    reqLog.error(
+      { err: error, status: 500, duration: Date.now() - start },
+      "dashboard.session_intent_failed",
+    );
+    const message =
+      error instanceof Error ? error.message : "Terjadi kesalahan internal";
     return buildFailedResponse(message, error, 500);
   }
 }

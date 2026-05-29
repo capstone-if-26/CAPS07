@@ -50,13 +50,20 @@ function extractPineconeMetadata(chunk: ChunkData): RecordMetadata {
 export async function upsertChunksPipeline(
   chunks: ChunkData[],
   namespaceId: string,
-  batchSize: number = 24, 
+  batchSize: number = 24,
 ): Promise<void> {
   if (chunks.length === 0) return;
 
   // 1. Batasi ukuran batch maksimal 64 untuk mematuhi regulasi Inference API
   const safeBatchSize = Math.min(batchSize, 64);
-  log.info({ chunkCount: chunks.length, batchSize: safeBatchSize, namespace: namespaceId }, "pinecone.upsert_started");
+  log.info(
+    {
+      chunkCount: chunks.length,
+      batchSize: safeBatchSize,
+      namespace: namespaceId,
+    },
+    "pinecone.upsert_started",
+  );
 
   const pineconeNs = getPineconeNamespace(namespaceId);
 
@@ -103,11 +110,23 @@ export async function upsertChunksPipeline(
         await pineconeNs.upsert({ records });
       });
 
-      log.debug({ batchStart: start, batchEnd: start + records.length - 1, namespace: namespaceId }, "pinecone.batch_upserted");
+      log.debug(
+        {
+          batchStart: start,
+          batchEnd: start + records.length - 1,
+          namespace: namespaceId,
+        },
+        "pinecone.batch_upserted",
+      );
     } catch (error) {
-      log.error({ err: error, batchStart: start, namespace: namespaceId }, "pinecone.batch_upsert_failed");
+      log.error(
+        { err: error, batchStart: start, namespace: namespaceId },
+        "pinecone.batch_upsert_failed",
+      );
 
-      throw new Error("Gagal memproses batch indeks" + start + "setelah maksimum percobaan");
+      throw new Error(
+        "Gagal memproses batch indeks" + start + "setelah maksimum percobaan",
+      );
     }
   }
 }
@@ -133,7 +152,10 @@ export async function retrieveRelevantChunks(
   globalTopK: number = 30,
   minScoreThreshold: number = 0.2,
 ): Promise<ScoredPineconeRecord<RecordMetadata>[]> {
-  log.debug({ namespaceCount: namespaces.length, topK: namespaceTopK }, "pinecone.query_embedding_started");
+  log.debug(
+    { namespaceCount: namespaces.length, topK: namespaceTopK },
+    "pinecone.query_embedding_started",
+  );
 
   let queryVector: number[];
 
@@ -155,14 +177,53 @@ export async function retrieveRelevantChunks(
   }
 
   const promises = namespaces.map(async (ns) => {
-    const pineconeNs = getPineconeNamespace(ns);
-    const response = await pineconeNs.query({
-      vector: queryVector,
-      topK: namespaceTopK,
-      includeMetadata: true,
-      filter: metadataFilter,
-    });
-    return response.matches;
+    const queryStart = performance.now();
+
+    try {
+      const pineconeNs = getPineconeNamespace(ns);
+
+      log.debug(
+        {
+          namespace: ns,
+          topK: namespaceTopK,
+          filter: metadataFilter,
+        },
+        "pinecone.namespace_query_started",
+      );
+
+      const response = await pineconeNs.query({
+        vector: queryVector,
+        topK: namespaceTopK,
+        includeMetadata: true,
+        filter: metadataFilter,
+      });
+
+      log.info(
+        {
+          namespace: ns,
+          latencyMs: performance.now() - queryStart,
+          matchCount: response.matches?.length || 0,
+          topScore: response.matches?.[0]?.score,
+        },
+        "pinecone.namespace_query_completed",
+      );
+
+      return response.matches;
+    } catch (error: any) {
+      log.error(
+        {
+          namespace: ns,
+          err: error,
+          message: error?.message,
+          cause: error?.cause,
+          stack: error?.stack,
+          status: error?.status,
+        },
+        "pinecone.namespace_query_failed",
+      );
+
+      return [];
+    }
   });
 
   const results = await Promise.all(promises);
@@ -186,7 +247,14 @@ export async function retrieveRelevantChunks(
   relevantMatches.sort((a, b) => (b.score || 0) - (a.score || 0));
 
   const topScore = relevantMatches[0]?.score ?? 0;
-  log.info({ matchCount: relevantMatches.length, topScore, namespaceCount: namespaces.length }, "pinecone.retrieval_completed");
+  log.info(
+    {
+      matchCount: relevantMatches.length,
+      topScore,
+      namespaceCount: namespaces.length,
+    },
+    "pinecone.retrieval_completed",
+  );
 
   return relevantMatches.slice(0, globalTopK);
 }
