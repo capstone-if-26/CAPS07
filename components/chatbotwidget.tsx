@@ -18,6 +18,134 @@ import {
 import MessageBubble, { type UIMessage } from "@/components/message";
 import Quiz from "@/components/quiz";
 
+type TaskStep = {
+  id: number;
+  title: string;
+  detail?: string;
+  status: "done" | "running" | "error";
+};
+
+function AgenticStatusIndicator({ steps }: { steps: TaskStep[] }) {
+  if (steps.length === 0) {
+    return (
+      <div className="flex items-center gap-1.5 py-0.5">
+        <span className="w-1.5 h-1.5 rounded-full bg-[#a11212] dot-1 inline-block" />
+        <span className="w-1.5 h-1.5 rounded-full bg-[#a11212] dot-2 inline-block" />
+        <span className="w-1.5 h-1.5 rounded-full bg-[#a11212] dot-3 inline-block" />
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ minWidth: "165px" }}>
+      {steps.map((step, index) => {
+        const isLast = index === steps.length - 1;
+        const hasDetail = !!step.detail && step.status === "running";
+        return (
+          <div key={step.id} className="flex gap-2 agentic-step-enter">
+            {/* Icon column + vertical connector */}
+            <div className="flex flex-col items-center shrink-0">
+              <div
+                style={{
+                  width: "18px",
+                  height: "18px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  opacity: step.status === "running" ? 1 : 0.5,
+                }}
+              >
+                {step.status === "running" ? (
+                  <span className="status-spinner" />
+                ) : step.status === "done" ? (
+                  <span
+                    style={{
+                      fontSize: "11px",
+                      color: "#22c55e",
+                      fontWeight: 700,
+                      lineHeight: 1,
+                    }}
+                  >
+                    ✓
+                  </span>
+                ) : (
+                  <span
+                    style={{
+                      fontSize: "11px",
+                      color: "#ef4444",
+                      fontWeight: 700,
+                      lineHeight: 1,
+                    }}
+                  >
+                    ✕
+                  </span>
+                )}
+              </div>
+              {!isLast && (
+                <div
+                  style={{
+                    width: "1.5px",
+                    flex: 1,
+                    minHeight: "10px",
+                    background: "rgba(161, 18, 18, 0.18)",
+                    borderRadius: "1px",
+                    margin: "2px 0",
+                  }}
+                />
+              )}
+            </div>
+
+            {/* Text column */}
+            <div
+              style={{
+                minWidth: 0,
+                paddingBottom: !isLast ? "10px" : 0,
+                display: "flex",
+                flexDirection: "column",
+                justifyContent: "center",
+                opacity: step.status === "running" ? 1 : 0.45,
+              }}
+            >
+              <span
+                style={{
+                  display: "block",
+                  fontSize: "11px",
+                  lineHeight: "1.3",
+                  fontWeight: step.status === "running" ? 600 : 400,
+                  color:
+                    step.status === "running"
+                      ? "#a11212"
+                      : step.status === "error"
+                        ? "#ef4444"
+                        : "#6b7280",
+                }}
+              >
+                {step.title}
+              </span>
+              {hasDetail && (
+                <span
+                  style={{
+                    display: "block",
+                    fontSize: "10px",
+                    color: "#9ca3af",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                    maxWidth: "180px",
+                    marginTop: "2px",
+                  }}
+                >
+                  {step.detail}
+                </span>
+              )}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 type ChatHistory = { id: string; title: string };
 
 const QUICK_MENU = [
@@ -257,6 +385,8 @@ export default function ChatbotWidget({ onClose }: ChatbotWidgetProps) {
   const [copyLoading, setCopyLoading] = useState(false);
   const [showQuiz, setShowQuiz] = useState(false);
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
+  const [taskSteps, setTaskSteps] = useState<TaskStep[]>([]);
+  const taskStepIdRef = useRef(0);
 
   const [tooltipClose, setTooltipClose] = useState(false);
   const [tooltipDot, setTooltipDot] = useState(false);
@@ -364,6 +494,8 @@ export default function ChatbotWidget({ onClose }: ChatbotWidgetProps) {
   // Core: kirim ke backend via streaming (TIDAK menambah pesan user, hanya bot)
   const sendToBackend = async (text: string) => {
     setIsLoading(true);
+    setTaskSteps([]);
+    taskStepIdRef.current = 0;
 
     // Tambah placeholder pesan bot untuk di-stream
     let botIdx = -1;
@@ -407,6 +539,25 @@ export default function ChatbotWidget({ onClose }: ChatbotWidgetProps) {
           });
         },
         onTask: (task: ChatTaskEvent) => {
+          setTaskSteps((prev) => {
+            const withPrevDone =
+              task.status === "running"
+                ? prev.map((s) =>
+                    s.status === "running"
+                      ? { ...s, status: "done" as const }
+                      : s,
+                  )
+                : prev;
+            return [
+              ...withPrevDone,
+              {
+                id: ++taskStepIdRef.current,
+                title: task.title,
+                detail: task.detail,
+                status: task.status,
+              },
+            ];
+          });
           if (task.status === "error") {
             setMessages((p) => {
               const updated = [...p];
@@ -482,6 +633,7 @@ export default function ChatbotWidget({ onClose }: ChatbotWidgetProps) {
       });
     } finally {
       setIsLoading(false);
+      setTaskSteps([]);
 
       // Fetch history setelah stream selesai untuk dapat messageId pesan bot
       const currentChatId = getSavedChatId();
@@ -645,6 +797,27 @@ export default function ChatbotWidget({ onClose }: ChatbotWidgetProps) {
         @keyframes slideInRiwayat {
           from { opacity: 0; transform: translateY(6px); }
           to   { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes spin {
+          from { transform: rotate(0deg); }
+          to   { transform: rotate(360deg); }
+        }
+        .status-spinner {
+          display: inline-block;
+          width: 14px;
+          height: 14px;
+          border: 2px solid rgba(161, 18, 18, 0.2);
+          border-top-color: #a11212;
+          border-radius: 50%;
+          animation: spin 0.7s linear infinite;
+          flex-shrink: 0;
+        }
+        @keyframes stepEnter {
+          from { opacity: 0; transform: translateY(3px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+        .agentic-step-enter {
+          animation: stepEnter 0.15s ease forwards;
         }
       `}</style>
 
@@ -929,15 +1102,17 @@ export default function ChatbotWidget({ onClose }: ChatbotWidgetProps) {
                         />
                       ))}
 
-                    {isLoading && (
-                      <div className="max-w-[85%] mx-auto flex flex-col">
-                        <div className="bg-[#f3f3f3] border border-[#a11212] rounded-md p-2 self-start flex items-center gap-1">
-                          <span className="w-1.5 h-1.5 rounded-full bg-[#a11212] dot-1 inline-block" />
-                          <span className="w-1.5 h-1.5 rounded-full bg-[#a11212] dot-2 inline-block" />
-                          <span className="w-1.5 h-1.5 rounded-full bg-[#a11212] dot-3 inline-block" />
+                    {isLoading &&
+                      !(
+                        messages[messages.length - 1]?.sender === "bot" &&
+                        !!messages[messages.length - 1]?.text
+                      ) && (
+                        <div className="max-w-[85%] mx-auto flex flex-col">
+                          <div className="bg-[#f3f3f3] border border-[#a11212] rounded-md p-2 self-start">
+                            <AgenticStatusIndicator steps={taskSteps} />
+                          </div>
                         </div>
-                      </div>
-                    )}
+                      )}
                     <div ref={chatEndRef} />
                   </div>
                 </>

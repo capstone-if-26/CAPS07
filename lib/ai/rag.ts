@@ -27,7 +27,6 @@ import {
   getToolQuery,
   getQuestionEvent,
   getSourceEvents,
-  shouldForceRetrieveTool,
 } from "./utils";
 import {
   getAgenticRagPrompt,
@@ -58,7 +57,7 @@ export function createAgenticRagStream(params: AgenticRagStreamParams) {
   const fallbackNamespaces = normalizeNamespaces([
     ...params.defaultNamespaces,
     ...availableNamespaces,
-    process.env.PINECONE_NAMESPACE || "pojk-22-2023-perlindungan-konsumen",
+    process.env.PINECONE_NAMESPACE || "",
   ]);
   const namespaceSet = new Set(availableNamespaces);
   const topK = params.topK ?? 6;
@@ -70,8 +69,6 @@ export function createAgenticRagStream(params: AgenticRagStreamParams) {
   const citationMatchMap = new Map<number, RetrievedMatch>();
   let nextCitationIndex = 1;
   const forceQuestionTool = shouldForceQuestionTool(params.question);
-  const forceRetrieveTool =
-    !forceQuestionTool && shouldForceRetrieveTool(params.question);
 
   const { systemPrompt, userPrompt } = getAgenticRagPrompt(
     params.longTermMemory,
@@ -91,9 +88,7 @@ export function createAgenticRagStream(params: AgenticRagStreamParams) {
     stopWhen: forceQuestionTool ? stepCountIs(1) : stepCountIs(4),
     toolChoice: forceQuestionTool
       ? { type: "tool", toolName: "ask_user_question" }
-      : forceRetrieveTool
-        ? { type: "tool", toolName: "retrieve_policy_context" }
-        : "auto",
+      : "auto",
     tools: {
       retrieve_policy_context: tool({
         description: RETRIEVE_POLICY_CONTEXT_DESCRIPTION,
@@ -159,7 +154,6 @@ export function createAgenticRagStream(params: AgenticRagStreamParams) {
           });
 
           retrievedMatches.push(...serializedMatches);
-
           return {
             namespacesUsed: namespacesToUse,
             context: formatRetrievedContext(matches, citationIndexByChunkId),
@@ -228,6 +222,9 @@ export function toAgenticEventStreamResponse(
   streamResult: ReturnType<typeof createAgenticRagStream>,
   headers: HeadersInit,
 ) {
+  let hadText = false;
+  let hadQuestion = false;
+
   const eventStream = streamResult.fullStream.pipeThrough(
     new TransformStream({
       transform(chunk, controller) {
@@ -244,6 +241,7 @@ export function toAgenticEventStreamResponse(
 
           case "tool-call": {
             if (chunk.toolName === "ask_user_question") {
+              hadQuestion = true;
               controller.enqueue(
                 formatAgenticEvent({
                   type: "task",
@@ -298,6 +296,7 @@ export function toAgenticEventStreamResponse(
             break;
 
           case "text-delta":
+            hadText = true;
             controller.enqueue(
               formatAgenticEvent({
                 type: "text",
@@ -316,6 +315,16 @@ export function toAgenticEventStreamResponse(
               }),
             );
             break;
+        }
+      },
+      flush(controller) {
+        if (!hadText && !hadQuestion) {
+          controller.enqueue(
+            formatAgenticEvent({
+              type: "text",
+              text: "Saya tidak dapat menemukan informasi tersebut dalam dokumen kebijakan yang tersedia.",
+            }),
+          );
         }
       },
     }),

@@ -3,6 +3,9 @@
 import { useState } from "react";
 import { submitFeedback } from "@/lib/api/chat";
 import Image from "next/image";
+import ReactMarkdown from "react-markdown";
+import { markdownComponents } from "./react-markdown";
+import remarkGfm from "remark-gfm";
 
 export type FlowStep = {
   id: string;
@@ -165,11 +168,21 @@ export default function Message({ msg, index, onFlowOption }: MessageProps) {
               : "bg-[#a11212] text-white self-end border border-[#a11212]"
           }`}
         >
-          {msg.text && (
-            <span className="break-words whitespace-pre-wrap block">
-              {msg.text}
-            </span>
-          )}
+          {msg.text &&
+            (isBot ? (
+              <div className="break-words font-normal leading-snug prose-none">
+                <ReactMarkdown
+                  components={markdownComponents}
+                  remarkPlugins={[remarkGfm]}
+                >
+                  {msg.text}
+                </ReactMarkdown>
+              </div>
+            ) : (
+              <span className="break-words whitespace-pre-wrap block">
+                {msg.text}
+              </span>
+            ))}
 
           {/* Radio button pilihan di dalam bubble bot */}
           {msg.flow?.step && isBot && (
