@@ -1,5 +1,19 @@
 import type { Components } from "react-markdown";
 
+function childrenTextLength(node: unknown): number {
+  if (node === null || node === undefined) return 0;
+  if (typeof node === "string") return node.length;
+  if (typeof node === "number") return String(node).length;
+  if (Array.isArray(node))
+    return (node as unknown[]).reduce(
+      (acc: number, n) => acc + childrenTextLength(n),
+      0,
+    );
+  if (typeof node === "object" && node !== null && "props" in node)
+    return childrenTextLength((node as { props: { children?: unknown } }).props.children);
+  return 0;
+}
+
 export const markdownComponents: Components = {
   // Buka link di tab baru, styling merah OJK
   a: ({ href, children }: any) => (
@@ -75,7 +89,7 @@ export const markdownComponents: Components = {
   th: ({ children }: any) => (
     <th
       className="px-1.5 py-1 text-left font-semibold text-[10px] whitespace-nowrap"
-      style={{ minWidth: "150px" }}
+      style={{ minWidth: childrenTextLength(children) > 25 ? "150px" : undefined }}
     >
       {children}
     </th>
@@ -84,7 +98,7 @@ export const markdownComponents: Components = {
   td: ({ children }: any) => (
     <td
       className="px-1.5 py-1 border-b border-black/[0.07] align-top leading-snug"
-      style={{ minWidth: "150px" }}
+      style={{ minWidth: childrenTextLength(children) > 25 ? "150px" : undefined }}
     >
       {children}
     </td>

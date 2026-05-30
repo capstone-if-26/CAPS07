@@ -1141,7 +1141,7 @@ export default function ChatbotWidget({ onClose }: ChatbotWidgetProps) {
                 placeholder="Selamat Datang, Apa yang bisa saya bantu?..."
                 disabled={isLoading}
                 rows={1}
-                className="flex-1 border border-[#a11212] rounded px-1.5 py-1 min-h-[26px] text-[10.5px] text-black bg-white placeholder-[#a11212]/50 outline-none disabled:opacity-60 resize-none overflow-hidden leading-tight"
+                className="flex-1 border border-[#a11212] rounded px-1.5 py-1.5 min-h-[26px] text-[10.5px] text-black bg-white placeholder-[#a11212]/50 outline-none disabled:opacity-60 resize-none overflow-hidden leading-tight"
               />
 
               <div className="relative flex items-end gap-1">

@@ -285,6 +285,7 @@ export function getAgenticRagPrompt(
 
   ## Answer format
     - Do NOT include a "References" section — the interface renders it separately.
+    - Do NOT output html tags, but markdown formatting is allowed (e.g., **bold**, _italic_, numbered lists, # headers level).
     - If the retrieved context still does not contain the answer, output exactly:
       "Saya tidak dapat menemukan informasi tersebut dalam dokumen kebijakan yang tersedia."
 
