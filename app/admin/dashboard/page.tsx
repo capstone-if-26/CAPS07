@@ -6,6 +6,7 @@ import SidebarExpanded from "@/components/sidebar-expanded"
 import IntentSesiChatPage from "@/components/intent-sesi-chat"
 import UserFeedbackCSATPage from "@/components/user-feedback-csat"
 import DokumenPage from "@/components/dokumen-page"
+import PerformaTeknis from "@/components/performa-teknis"
 import WordCloud from "@/components/word-cloud"
 import Image from "next/image"
 import {
@@ -41,7 +42,7 @@ const SIDEBAR_ICONS = [
   { icon: "chat", label: "Intent dan Sesi Chat", enabled: true },
   { icon: "heart", label: "User Feedback dan CSAT", enabled: true },
   { icon: "doc", label: "Dokumen", enabled: true },
-  { icon: "pie", label: "Performa dan Teknis", enabled: false },
+  { icon: "pie", label: "Performa dan Teknis", enabled: true },
 ]
 
 const INTENT_COLORS = ["#3B82F6", "#22C55E", "#F97316", "#D1D5DB"]
@@ -945,6 +946,8 @@ useEffect(() => { fetchAll() }, [fetchAll])
               <UserFeedbackCSATPage />
             ) : activeMenu === "Dokumen" ? (
               <DokumenPage />
+            ) : activeMenu === "Performa dan Teknis" ? (
+              <PerformaTeknis />
             ) : (
             <div style={{ minHeight: "calc(100vh - 110px)" }}>
 
