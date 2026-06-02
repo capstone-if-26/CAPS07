@@ -1,7 +1,6 @@
 import * as crypto from "crypto";
 import * as fs from "fs/promises";
 import * as path from "path";
-import * as pdfjsLib from "pdfjs-dist/legacy/build/pdf.mjs";
 import * as mammoth from "mammoth";
 import {
   DocType,
@@ -11,6 +10,9 @@ import {
   ChunkMetadata,
   ChunkData,
 } from "@/types/chunker";
+import { getModuleLogger } from "@/lib/logger";
+
+const log = getModuleLogger("lib/chunking/faqRegexChunker");
 
 interface ChunkFaqMetadata extends ChunkMetadata {
   question_number?: number;
@@ -81,73 +83,53 @@ export class FAQRegexChunker {
   }
 
   private async extractBlocksPdf(fileBuffer: Buffer): Promise<BlockData[]> {
-    const data = new Uint8Array(fileBuffer);
-
-    const loadingTask = pdfjsLib.getDocument({
-      data,
-      useWorkerFetch: false,
-    });
-
-    const pdf = await loadingTask.promise;
+    // Gunakan pdf-parse yang server-side safe (tidak memerlukan browser API seperti DOMMatrix)
+    const { createRequire } = await import("module");
+    const require = createRequire(import.meta.url);
+    const pdfParse = require("pdf-parse") as (
+      buffer: Buffer,
+      options?: object,
+    ) => Promise<{ text: string; numpages: number; info: object }>;
+    const pdfData = await pdfParse(fileBuffer);
 
     const blocksData: BlockData[] = [];
     let blockId = 1;
+    let currentBlockLines: string[] = [];
 
-    for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
-      const page = await pdf.getPage(pageNum);
-      const textContent = await page.getTextContent();
-      const lineMap = new Map<number, string[]>();
+    const flushBlock = () => {
+      if (currentBlockLines.length === 0) return;
 
-      for (const item of textContent.items) {
-        if (!("str" in item) || !("transform" in item)) continue;
+      const text = this.cleanText(currentBlockLines.join("\n"));
 
-        const text = item.str?.trim();
-        if (!text) continue;
-        const y = Math.round(item.transform[5]);
-
-        if (!lineMap.has(y)) {
-          lineMap.set(y, []);
-        }
-
-        lineMap.get(y)!.push(text);
+      if (text.length > 5) {
+        blocksData.push({
+          id: `BLK${String(blockId).padStart(5, "0")}`,
+          page: 1, // pdf-parse tidak memberikan info halaman per baris
+          text,
+          char_len: text.length,
+        });
+        blockId++;
       }
-      const sortedLines = [...lineMap.entries()]
-        .sort((a, b) => b[0] - a[0])
-        .map(([_, texts]) => texts.join(" ").trim())
-        .filter(Boolean);
 
-      let currentBlockLines: string[] = [];
+      currentBlockLines = [];
+    };
 
-      const flushBlock = () => {
-        if (currentBlockLines.length === 0) return;
+    const lines = pdfData.text.split("\n");
 
-        const text = this.cleanText(currentBlockLines.join("\n"));
+    for (const line of lines) {
+      const trimmedLine = line.trim();
+      if (!trimmedLine) continue;
 
-        if (text.length > 5) {
-          blocksData.push({
-            id: `BLK${String(blockId).padStart(5, "0")}`,
-            page: pageNum,
-            text,
-            char_len: text.length,
-          });
+      const isQuestion = /^\s*#\s+/.test(trimmedLine);
 
-          blockId++;
-        }
-
-        currentBlockLines = [];
-      };
-
-      for (const line of sortedLines) {
-        const isQuestion = /^\s*#\s+/.test(line);
-
-        if (isQuestion) {
-          flushBlock();
-        }
-
-        currentBlockLines.push(line);
+      if (isQuestion) {
+        flushBlock();
       }
-      flushBlock();
+
+      currentBlockLines.push(trimmedLine);
     }
+
+    flushBlock();
 
     return blocksData;
   }
@@ -174,6 +156,8 @@ export class FAQRegexChunker {
   }
 
   public async process(): Promise<ChunkData[]> {
+    log.debug({ documentName: this.documentName, fileName: this.fileName, docType: this.docType }, "chunking.faq_process_started");
+
     const fileBuffer = await this.getFileBuffer();
     const fileHash = this.generateFileHash(fileBuffer);
     const blocks = await this.extractBlocks(fileBuffer);
@@ -262,6 +246,7 @@ export class FAQRegexChunker {
         chunks[i].metadata.next_chunk_id = chunks[i + 1].metadata.chunk_id;
     }
 
+    log.info({ documentName: this.documentName, chunkCount: chunks.length, qaCount: stateNomor }, "chunking.faq_process_completed");
     return chunks;
   }
 }

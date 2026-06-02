@@ -34,9 +34,12 @@ import {
   buildDefaultNamespaces,
   formatConversation,
 } from "./utils";
+import { getModuleLogger } from "@/lib/logger";
 
 export { normalizeClientMessageSnapshot } from "./utils";
 export type { ClientMessageSnapshot } from "./type";
+
+const log = getModuleLogger("modules/chats/service");
 
 const DEFAULT_MODEL_NAME =
   process.env.LLM_MODEL || "nvidia/nemotron-3-nano-30b-a3b:free";
@@ -91,12 +94,13 @@ async function buildAgenticStreamSession({
         classifyIntentAndRelevance(question, shortTermMemory)
           .then(async (classification) => {
             await updateChatIntent(chatId, classification.intent);
+            log.debug({ chatId, intent: classification.intent }, "chat.intent_classified");
           })
           .catch((err) => {
-            console.error("Failed to classify intent real-time:", err);
+            log.error({ err, chatId }, "chat.intent_classify_failed");
           });
       } catch (error) {
-        console.error("Failed to persist assistant response:", error);
+        log.error({ err: error, chatId }, "chat.assistant_persist_failed");
       }
     },
   });

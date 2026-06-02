@@ -7,6 +7,9 @@ import {
   DocType,
 } from "../../types/chunker";
 import path from "path";
+import { getModuleLogger } from "@/lib/logger";
+
+const log = getModuleLogger("lib/chunking/adaptiveSemanticChunker");
 
 export class AdaptiveSemanticChunker {
   private readonly sourceInput: string | Buffer;
@@ -62,10 +65,12 @@ export class AdaptiveSemanticChunker {
 
   public async initialize(): Promise<void> {
     if (!this.extractor) {
+      log.debug({ model: AdaptiveSemanticChunker.MODEL_NAME }, "chunking.semantic_model_loading");
       this.extractor = await pipeline(
         "feature-extraction",
         AdaptiveSemanticChunker.MODEL_NAME,
       );
+      log.info({ model: AdaptiveSemanticChunker.MODEL_NAME }, "chunking.semantic_model_loaded");
     }
   }
 
@@ -197,6 +202,8 @@ export class AdaptiveSemanticChunker {
 
     const cleanedText = this.cleanText(text);
     const sentences = this.splitSentences(cleanedText);
+    log.debug({ documentName: this.documentName, sentenceCount: sentences.length }, "chunking.semantic_chunk_started");
+
     if (sentences.length <= 1) return [];
 
     const embeddings = await this.embedTexts(sentences);
@@ -320,6 +327,7 @@ export class AdaptiveSemanticChunker {
         chunks[i].metadata.next_chunk_id = chunks[i + 1].metadata.chunk_id;
     }
 
+    log.info({ documentName: this.documentName, chunkCount: chunks.length, sentenceCount: sentences.length }, "chunking.semantic_chunk_completed");
     return chunks;
   }
 }

@@ -1,7 +1,6 @@
 import * as fs from "fs/promises";
 import * as path from "path";
 import * as crypto from "crypto";
-import * as pdfjsLib from "pdfjs-dist/legacy/build/pdf.mjs";
 import * as mammoth from "mammoth";
 import {
   DocType,
@@ -10,6 +9,9 @@ import {
   BlockData,
   ChunkData,
 } from "@/types/chunker";
+import { getModuleLogger } from "@/lib/logger";
+
+const log = getModuleLogger("lib/chunking/legalRegexChunker");
 
 export class LegalRegexChunker {
   private readonly sourceInput: string | Buffer;
@@ -104,62 +106,37 @@ export class LegalRegexChunker {
   }
 
   /**
-   * Ekstraksi PDF Asinkron menggunakan pdfjs-dist
+   * Ekstraksi PDF menggunakan pdf-parse (server-side safe, tanpa dependensi browser API)
    */
   private async extractBlocksPdf(fileBuffer: Buffer): Promise<BlockData[]> {
-    const data = new Uint8Array(fileBuffer);
-    const loadingTask = pdfjsLib.getDocument({ data });
-    const pdf = await loadingTask.promise;
+    // Dynamic import — pdf-parse mendukung CJS dan ESM, gunakan require() via createRequire
+    const { createRequire } = await import("module");
+    const require = createRequire(import.meta.url);
+    const pdfParse = require("pdf-parse") as (
+      buffer: Buffer,
+      options?: object,
+    ) => Promise<{ text: string; numpages: number; info: object }>;
+    const pdfData = await pdfParse(fileBuffer);
 
     const blocksData: BlockData[] = [];
     let blockId = 1;
 
-    for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
-      const page = await pdf.getPage(pageNum);
-      const textContent = await page.getTextContent();
+    // Pisahkan per baris, setiap baris adalah satu blok kandidat untuk automaton struktural
+    const lines = pdfData.text
+      .split("\n")
+      .map((line: string) => line.trim())
+      .filter((line: string) => line.length > 5);
 
-      let currentBlockText = "";
-      let lastY = -1;
-
-      for (const item of textContent.items) {
-        if ("str" in item && "transform" in item) {
-          const currentY = item.transform[5];
-          const textStr = item.str;
-
-          if (lastY !== -1) {
-            const deltaY = Math.abs(lastY - currentY);
-            
-            if (deltaY > 10) {
-              const isStructuralKeyword = /^\s*(BAB|Bagian|Paragraf|Pasal)\b/i.test(textStr);
-
-              if (deltaY > 20 || isStructuralKeyword) {
-                currentBlockText += "\n\n"; 
-              } else {
-                currentBlockText += "\n"; 
-              }
-            }
-          }
-          
-          currentBlockText += textStr;
-          lastY = currentY;
-        }
-      }
-
-      const rawBlocks = currentBlockText.split(/\n\s*\n/);
-
-      for (const rawText of rawBlocks) {
-        const cleanedText = this.cleanText(rawText);
-        if (cleanedText.length > 5) {
-          blocksData.push({
-            id: `BLK${String(blockId).padStart(5, "0")}`,
-            page: pageNum,
-            text: cleanedText,
-            char_len: cleanedText.length,
-          });
-          blockId++;
-        }
-      }
+    for (const line of lines) {
+      blocksData.push({
+        id: `BLK${String(blockId).padStart(5, "0")}`,
+        page: 1, // pdf-parse tidak memberikan info halaman per baris
+        text: line,
+        char_len: line.length,
+      });
+      blockId++;
     }
+
     return blocksData;
   }
 
@@ -193,6 +170,8 @@ export class LegalRegexChunker {
    * Core Processing: Evaluasi State Machine & Chunking
    */
   public async process(): Promise<ChunkData[]> {
+    log.debug({ documentName: this.documentName, fileName: this.fileName, docType: this.docType }, "chunking.legal_process_started");
+
     const fileBuffer = await this.getFileBuffer();
     const fileHash = await this.generateFileHash(fileBuffer);
     const blocks = await this.extractBlocks(fileBuffer);
@@ -301,6 +280,7 @@ export class LegalRegexChunker {
         chunks[i].metadata.next_chunk_id = chunks[i + 1].metadata.chunk_id;
     }
 
+    log.info({ documentName: this.documentName, chunkCount: chunks.length, blockCount: blocks.length }, "chunking.legal_process_completed");
     return chunks;
   }
 }

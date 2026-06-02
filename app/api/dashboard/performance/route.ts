@@ -3,11 +3,11 @@ import {
   buildFailedResponse,
   buildSuccessResponse,
 } from "@/lib/utils/response";
-import { getDashboardFeedback } from "@/modules/dashboard/service";
+import { getDashboardPerformance } from "@/modules/dashboard/service";
 import { DashboardOverviewParams } from "@/modules/dashboard/type";
 import { getModuleLogger } from "@/lib/logger";
 
-const log = getModuleLogger("api/dashboard/feedback");
+const log = getModuleLogger("api/dashboard/performance");
 
 export async function GET(req: NextRequest) {
   const start = Date.now();
@@ -15,10 +15,10 @@ export async function GET(req: NextRequest) {
   const reqLog = log.child({
     request_id: requestId,
     method: "GET",
-    path: "/api/dashboard/feedback",
+    path: "/api/dashboard/performance",
   });
 
-  reqLog.debug({}, "dashboard.feedback_requested");
+  reqLog.debug({}, "dashboard.performance_requested");
 
   try {
     const searchParams = req.nextUrl.searchParams;
@@ -27,17 +27,21 @@ export async function GET(req: NextRequest) {
     const month = searchParams.get("month") || undefined;
 
     const params: DashboardOverviewParams = { days, year, month };
-    const data = await getDashboardFeedback(params);
+    const data = await getDashboardPerformance(params);
 
     reqLog.info(
       { days, year, month, status: 200, duration: Date.now() - start },
-      "dashboard.feedback_fetched",
+      "dashboard.performance_fetched",
     );
-    return buildSuccessResponse(data, "Berhasil mengambil data feedback", 200);
+    return buildSuccessResponse(
+      data,
+      "Berhasil mengambil data performa endpoint",
+      200,
+    );
   } catch (error: unknown) {
     reqLog.error(
       { err: error, status: 500, duration: Date.now() - start },
-      "dashboard.feedback_failed",
+      "dashboard.performance_failed",
     );
     const message =
       error instanceof Error ? error.message : "Terjadi kesalahan internal";

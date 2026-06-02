@@ -15,6 +15,13 @@
       "when": 1778655734864,
       "tag": "0001_dashing_cargill",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1779942530702,
+      "tag": "0002_nosy_ares",
+      "breakpoints": true
     }
   ]
 }

@@ -1,10 +1,15 @@
-import { Chats } from '@/modules/chats/type';
+import { Chats } from "@/modules/chats/type";
 
 export type AgenticRagStreamEvent =
-  | { type: 'task'; status: 'running' | 'done' | 'error'; title: string; detail?: string }
-  | { type: 'source'; source: { title: string; href: string } }
-  | { type: 'question'; question: AgenticQuestion }
-  | { type: 'text'; text: string };
+  | {
+      type: "task";
+      status: "running" | "done" | "error";
+      title: string;
+      detail?: string;
+    }
+  | { type: "source"; source: { title: string; href: string } }
+  | { type: "question"; question: AgenticQuestion }
+  | { type: "text"; text: string };
 
 export type AgenticQuestionOption = {
   id: string;
@@ -51,3 +56,18 @@ export type SummaryParams = {
   question: string;
   answer: string;
 };
+
+// Routing types
+export interface DocumentInfo {
+  name: string;
+  namespace: string;
+  description: string;
+}
+
+export interface RoutingResult {
+  intent: "general" | "casual" | "business";
+  confidence: number;
+  reason: string;
+  needs_namespace_routing: boolean;
+  namespaces?: string[];
+}

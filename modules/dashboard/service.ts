@@ -9,32 +9,143 @@ import {
   getFeedbackOverall,
   getFeedbackByIntent,
   getFeedbackTrend,
-  DashboardOverviewParams,
+  getPerformanceSummaryOverall,
+  getPerformanceByEndpoint,
+  getPerformanceTrend,
 } from "./repository";
+
+import { DashboardOverviewParams } from "./type";
 
 // ---------------------------------------------------------------------------
 // Word cloud helpers
 // ---------------------------------------------------------------------------
 
 const STOP_WORDS = new Set([
-  "yang", "dan", "atau", "dengan", "untuk", "dari", "pada", "ini", "itu", "juga",
-  "adalah", "ada", "saya", "anda", "bisa", "akan", "sudah", "tidak", "belum",
-  "saja", "lebih", "agar", "kami", "kita", "mereka", "dapat", "harus", "perlu",
-  "cara", "bagaimana", "apakah", "kenapa", "kapan", "dimana", "siapa", "berapa",
-  "ingin", "tahu", "tentang", "tolong", "bantu", "mohon", "terima", "kasih",
-  "halo", "hello", "selamat", "pagi", "siang", "malam", "sore", "hari",
-  "jika", "maka", "namun", "tetapi", "tapi", "karena", "sebab", "oleh",
-  "seperti", "dalam", "antara", "lain", "masih", "telah", "pernah",
-  "apabila", "bagi", "kamu", "kalian", "serta", "yaitu", "jadi",
-  "suatu", "sebuah", "setiap", "semua", "setelah", "sebelum", "tanpa",
-  "atas", "bawah", "sebagai", "apa", "lagi", "punya", "buat", "biasa",
-  "banyak", "ketika", "saat", "cukup", "hanya", "kalau", "mau", "diri",
-  "kata", "gimana", "gak", "nggak", "dong", "yuk", "deh", "sih",
-  "oke", "okay", "iya", "nih", "loh", "dulu", "jangan", "jelas",
-  "banget", "sekali", "sangat", "menjadi", "butuh", "minta", "berarti",
+  "yang",
+  "dan",
+  "atau",
+  "dengan",
+  "untuk",
+  "dari",
+  "pada",
+  "ini",
+  "itu",
+  "juga",
+  "adalah",
+  "ada",
+  "saya",
+  "anda",
+  "bisa",
+  "akan",
+  "sudah",
+  "tidak",
+  "belum",
+  "saja",
+  "lebih",
+  "agar",
+  "kami",
+  "kita",
+  "mereka",
+  "dapat",
+  "harus",
+  "perlu",
+  "cara",
+  "bagaimana",
+  "apakah",
+  "kenapa",
+  "kapan",
+  "dimana",
+  "siapa",
+  "berapa",
+  "ingin",
+  "tahu",
+  "tentang",
+  "tolong",
+  "bantu",
+  "mohon",
+  "terima",
+  "kasih",
+  "halo",
+  "hello",
+  "selamat",
+  "pagi",
+  "siang",
+  "malam",
+  "sore",
+  "hari",
+  "jika",
+  "maka",
+  "namun",
+  "tetapi",
+  "tapi",
+  "karena",
+  "sebab",
+  "oleh",
+  "seperti",
+  "dalam",
+  "antara",
+  "lain",
+  "masih",
+  "telah",
+  "pernah",
+  "apabila",
+  "bagi",
+  "kamu",
+  "kalian",
+  "serta",
+  "yaitu",
+  "jadi",
+  "suatu",
+  "sebuah",
+  "setiap",
+  "semua",
+  "setelah",
+  "sebelum",
+  "tanpa",
+  "atas",
+  "bawah",
+  "sebagai",
+  "apa",
+  "lagi",
+  "punya",
+  "buat",
+  "biasa",
+  "banyak",
+  "ketika",
+  "saat",
+  "cukup",
+  "hanya",
+  "kalau",
+  "mau",
+  "diri",
+  "kata",
+  "gimana",
+  "gak",
+  "nggak",
+  "dong",
+  "yuk",
+  "deh",
+  "sih",
+  "oke",
+  "okay",
+  "iya",
+  "nih",
+  "loh",
+  "dulu",
+  "jangan",
+  "jelas",
+  "banget",
+  "sekali",
+  "sangat",
+  "menjadi",
+  "butuh",
+  "minta",
+  "berarti",
 ]);
 
-function processWordCloud(contents: string[]): { word: string; count: number }[] {
+function processWordCloud(
+  contents: string[],
+): { word: string; count: number }[] {
   const freq = new Map<string, number>();
 
   for (const content of contents) {
@@ -69,13 +180,14 @@ function computeCsat(likes: number, dislikes: number): number {
 // ---------------------------------------------------------------------------
 
 export async function getDashboardOverview(params: DashboardOverviewParams) {
-  const [summary, intents, likeData, trendChats, trendFeedbacks] = await Promise.all([
-    getDashboardOverviewSummary(params),
-    getDashboardOverviewIntents(params),
-    getDashboardOverviewLikeRate(params),
-    getOverviewTrendChats(params),
-    getOverviewTrendFeedbacks(params),
-  ]);
+  const [summary, intents, likeData, trendChats, trendFeedbacks] =
+    await Promise.all([
+      getDashboardOverviewSummary(params),
+      getDashboardOverviewIntents(params),
+      getDashboardOverviewLikeRate(params),
+      getOverviewTrendChats(params),
+      getOverviewTrendFeedbacks(params),
+    ]);
 
   const completionRate =
     summary.totalChats > 0
@@ -149,7 +261,9 @@ export async function getDashboardFeedback(params: DashboardOverviewParams) {
   };
 }
 
-export async function getDashboardSessionIntent(params: DashboardOverviewParams) {
+export async function getDashboardSessionIntent(
+  params: DashboardOverviewParams,
+) {
   const [intents, sessionAnalysis, messageContents] = await Promise.all([
     getDashboardOverviewIntents(params),
     getSessionAnalysisStats(params),
@@ -169,5 +283,47 @@ export async function getDashboardSessionIntent(params: DashboardOverviewParams)
       withContact: sessionAnalysis.withContact,
       dropOff: sessionAnalysis.dropOff,
     },
+  };
+}
+
+// Human-readable labels for each endpoint key
+const ENDPOINT_LABELS: Record<string, string> = {
+  chat: "Chat",
+  quiz: "Quiz",
+  summary: "Ringkasan",
+};
+
+export async function getDashboardPerformance(params: DashboardOverviewParams) {
+  const [overall, byEndpoint, trend] = await Promise.all([
+    getPerformanceSummaryOverall(params),
+    getPerformanceByEndpoint(params),
+    getPerformanceTrend(params),
+  ]);
+
+  return {
+    summary: {
+      totalRequests: overall.totalRequests ?? 0,
+      avgResponseMs: overall.avgResponseMs ?? 0,
+      p50Ms: overall.p50Ms ?? 0,
+      p95Ms: overall.p95Ms ?? 0,
+      errorCount: overall.errorCount ?? 0,
+      errorRate: Number(overall.errorRate ?? 0),
+    },
+    byEndpoint: byEndpoint.map((row) => ({
+      endpoint: row.endpoint,
+      label: ENDPOINT_LABELS[row.endpoint] ?? row.endpoint,
+      totalRequests: row.totalRequests,
+      avgResponseMs: row.avgResponseMs ?? 0,
+      p95Ms: row.p95Ms ?? 0,
+      errorCount: row.errorCount,
+      errorRate: Number(row.errorRate ?? 0),
+    })),
+    trend: trend.map((row) => ({
+      period: row.period,
+      avgResponseMs: row.avgResponseMs ?? 0,
+      requestCount: row.requestCount,
+      errorCount: row.errorCount,
+      errorRate: Number(row.errorRate ?? 0),
+    })),
   };
 }
