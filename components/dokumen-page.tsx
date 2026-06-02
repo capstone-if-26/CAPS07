@@ -921,8 +921,7 @@ function HapusModal({
   );
 }
 
-// Modal Tambah Dokumen — POST /api/documents
-
+// Tambah Dokumen — POST /api/documents
 function TambahDokumenModal({
   onClose,
   onAdded,
@@ -944,6 +943,16 @@ function TambahDokumenModal({
   const [dragOver, setDragOver] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const getAllowedFileTypes = (docType: string) => {
+    if (docType === "faq" || docType === "legal_document") {
+      return { accept: ".pdf,.docx", label: "PDF, DOCX" }
+    }
+    if (docType) {
+      return { accept: ".txt,.md", label: "TXT, MD" }
+    }
+    return { accept: ".pdf,.docx,.txt,.md", label: "PDF, DOCX, TXT, MD" }
+  }
 
   const TIPE_OPTIONS = [
     "legal_document",
@@ -1281,7 +1290,7 @@ function TambahDokumenModal({
                   <span
                     style={{ fontSize: 13, color: "#8C0000", fontWeight: 600 }}
                   >
-                    Pilih file (PDF, DOCX, TXT)
+                    Pilih file ({getAllowedFileTypes(form.documentType).label})
                   </span>
                 </>
               )}
@@ -1289,7 +1298,7 @@ function TambahDokumenModal({
             <input
               id="tambah-doc-file"
               type="file"
-              accept=".pdf,.docx,.txt"
+              accept={getAllowedFileTypes(form.documentType).accept}
               style={{ display: "none" }}
               onChange={(e) => {
                 if (e.target.files?.[0]) handleFile(e.target.files[0]);

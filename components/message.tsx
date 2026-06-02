@@ -123,9 +123,10 @@ function BotFeedback({
           height={14}
           quality={100}
           style={{
-            filter: likeFlash || feedback === "like" ? "none" : "grayscale(0)",
-            opacity: feedback === "dislike" ? 0.4 : 1,
-            transition: "filter 0.1s ease",
+            filter: feedback === "like"
+              ? "invert(13%) sepia(90%) saturate(700%) hue-rotate(340deg) brightness(80%)"
+              : feedback === "dislike" ? "grayscale(1) opacity(0.4)" : "none",
+            transition: "filter 0.2s ease",
           }}
         />
       </button>
@@ -142,10 +143,10 @@ function BotFeedback({
           height={14}
           quality={100}
           style={{
-            filter:
-              dislikeFlash || feedback === "dislike" ? "none" : "grayscale(0)",
-            opacity: feedback === "like" ? 0.4 : 1,
-            transition: "filter 0.1s ease",
+            filter: feedback === "dislike"
+              ? "invert(13%) sepia(90%) saturate(700%) hue-rotate(340deg) brightness(80%)"
+              : feedback === "like" ? "grayscale(1) opacity(0.4)" : "none",
+            transition: "filter 0.2s ease",
           }}
         />
       </button>

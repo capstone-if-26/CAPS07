@@ -280,18 +280,31 @@ export default function AdminDashboardPage() {
   const [loading, setLoading] = useState(true)
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [activeMenu, setActiveMenu] = useState("Overview")
+
+  useEffect(() => {
+    const saved = localStorage.getItem("activeMenu")
+    const valid = SIDEBAR_ICONS.map(s => s.label)
+    if (saved && valid.includes(saved)) {
+      setActiveMenu(saved)
+    }
+  }, [])
   const [userSession, setUserSession] = useState<UserSession | null>(null)
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false)
   const router = useRouter()
 
-const handleLogout = async () => {
-  try {
-    await fetch("/api/auth/sign-out", { method: "POST" })
-    router.push("/admin/login")
-  } catch (e) {
-    console.error("Logout failed", e)
+  const handleMenuChange = (menu: string) => {
+  setActiveMenu(menu)
+  localStorage.setItem("activeMenu", menu)
   }
-}
+
+  const handleLogout = async () => {
+    try {
+      await fetch("/api/auth/sign-out", { method: "POST" })
+      router.push("/admin/login")
+    } catch (e) {
+      console.error("Logout failed", e)
+    }
+  }
 
   const fetchAll = useCallback(async () => {
   setLoading(true)
@@ -439,13 +452,15 @@ useEffect(() => { fetchAll() }, [fetchAll])
           display: flex;
           flex-direction: column;
           height: 100vh;
-          overflow-y: auto;
+          overflow-y: hidden;
         }
 
         .content {
           padding: 24px 28px 60px;
           flex: 1;
           margin-top: 57px;
+          overflow-y: auto;
+          height: calc(100vh - 57px);
         }
 
 
@@ -750,8 +765,8 @@ useEffect(() => { fetchAll() }, [fetchAll])
         /* Responsive — Mobile */
         @media (max-width: 640px) {
           .sidebar { display: none; }
-          .main { margin-left: 0; padding-bottom: 72px; }
-          .content { padding: 12px 12px 16px; }
+          .main { margin-left: 0; overflow: hidden; }
+          .content { padding: 12px 12px 80px;  height: calc(100vh - 57px); }
           .stat-row { grid-template-columns: 1fr; gap: 10px; margin-bottom: 14px; }
           .charts-row { grid-template-columns: 1fr; gap: 10px; margin-bottom: 10px; }
           .bottom-row { grid-template-columns: 1fr; gap: 10px; }
@@ -862,7 +877,7 @@ useEffect(() => { fetchAll() }, [fetchAll])
               icon={s.icon}
               label={s.label}
               active={activeMenu === s.label}
-              onClick={s.enabled ? () => setActiveMenu(s.label) : undefined}
+              onClick={s.enabled ? () => handleMenuChange(s.label) : undefined}
               disabled={!s.enabled}
             />
           ))}
@@ -877,7 +892,7 @@ useEffect(() => { fetchAll() }, [fetchAll])
           open={sidebarOpen}
           onClose={() => setSidebarOpen(false)}
           activeMenu={activeMenu}
-          onMenuClick={setActiveMenu}
+          onMenuClick={handleMenuChange}
           onLogout={handleLogout}
         />
 
@@ -957,7 +972,7 @@ useEffect(() => { fetchAll() }, [fetchAll])
               <StatCard
                 label="Total Sesi"
                 value={loading ? "—" : totalSesi.toLocaleString("id-ID")}
-                badge={loading ? undefined : `+${trend}%`}
+                badge={loading ? undefined : `+${trend.toLocaleString("id-ID", { maximumFractionDigits: 1 })}%`}
                 badgeType="positive"
                 sub1={loading ? undefined : `Resolved: ${fmtNum(resolvedTotal)}`}
                 sub2={loading ? undefined : `Bulan ini: ${fmtNum(totalSesi)}`}
@@ -974,8 +989,8 @@ useEffect(() => { fetchAll() }, [fetchAll])
               {/* Persentase Berhasil */}
               <StatCard
                 label="Persentase Berhasil"
-                value={loading ? "—" : `${avgRate.toFixed(1)}%`}
-                badge="+2.1%"
+                value={loading ? "—" : `${avgRate.toLocaleString("id-ID", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`}
+                badge="+2,1%"
                 badgeType="positive"
               >
                 {loading ? (
@@ -988,7 +1003,7 @@ useEffect(() => { fetchAll() }, [fetchAll])
               {/* Tingkat Kepuasan */}
               <StatCard
                 label="Tingkat Kepuasan"
-                value={loading ? "—" : `${csatPct.toFixed(1)}%`}
+                value={loading ? "—" : `${csatPct.toLocaleString("id-ID", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`}
                 badge={
                 <>
                   <Image
@@ -1007,8 +1022,8 @@ useEffect(() => { fetchAll() }, [fetchAll])
               {/* Cakupan Pertanyaan */}
               <StatCard
                 label="Cakupan Pertanyaan"
-                value={loading ? "—" : `${coveragePct}%`}
-                badge="-0.4%"
+                value={loading ? "—" : `${Number(coveragePct).toLocaleString("id-ID")}%`}
+                badge="-0,4%"
                 badgeType="negative"
                 sub1={loading ? undefined : `Selesai: ${fmtNum(resolvedTotal)}`}
                 sub2={loading ? undefined : `PendingMerah:${unhandled}`}
