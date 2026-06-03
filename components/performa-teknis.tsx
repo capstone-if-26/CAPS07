@@ -1,5 +1,6 @@
 "use client"
 
+import { useState, useEffect } from "react"
 import {
   LineChart, Line, BarChart, Bar,
   XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
@@ -125,6 +126,40 @@ const DUMMY_TABLE = [
   },
 ]
 
+// Types
+type PerformaSummary = {
+  totalRequests: number
+  avgResponseMs: number
+  p50Ms: number
+  p95Ms: number
+  errorCount: number
+  errorRate: number
+}
+
+type PerformaByEndpoint = {
+  endpoint: string
+  label: string
+  totalRequests: number
+  avgResponseMs: number
+  p95Ms: number
+  errorCount: number
+  errorRate: number
+}
+
+type PerformaTrend = {
+  period: string
+  avgResponseMs: number
+  requestCount: number
+  errorCount: number
+  errorRate: number
+}
+
+type PerformaData = {
+  summary: PerformaSummary
+  byEndpoint: PerformaByEndpoint[]
+  trend: PerformaTrend[]
+}
+
 // Tick style
 const tickStyle = { fontSize: 11, fill: "#374151", fontWeight: 500 }
 
@@ -177,9 +212,87 @@ function LegendLine({ color, label, isBar }: { color: string; label: string; isB
 
 // Main Component
 export default function PerformaTeknis() {
+  const [data, setData] = useState<PerformaData | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const res = await fetch("/api/dashboard/performance?days=30")
+        const json = await res.json()
+        if (json.status) setData(json.data)
+      } catch (e) {
+        console.error(e)
+      } finally {
+        setLoading(false)
+      }
+    }
+    fetchData()
+  }, [])
+
+  // Derived dari API
+  const summary = data?.summary
+  const statCards = summary ? [
+    { label: "Total Permintaan",        value: summary.totalRequests.toLocaleString("id-ID"),  sub: "Permintaan" },
+    { label: "Rata-rata Waktu Respons", value: summary.avgResponseMs.toLocaleString("id-ID"), sub: "ms" },
+    { label: "P50 Waktu Respon",        value: summary.p50Ms.toLocaleString("id-ID"),          sub: "ms" },
+    { label: "P95 Waktu Respon",        value: summary.p95Ms.toLocaleString("id-ID"),          sub: "ms" },
+    { label: "Jumlah Error",            value: summary.errorCount.toLocaleString("id-ID"),     sub: "Error" },
+    { label: "Tingkat Error",           value: summary.errorRate.toLocaleString("id-ID", { minimumFractionDigits: 2, maximumFractionDigits: 2 }), sub: "%" },
+  ] : []
+
+  const responseTimeTrend = (data?.trend ?? []).map(d => ({
+    date: (() => {
+      const dt = new Date(d.period)
+      return isNaN(dt.getTime()) ? d.period : dt.toLocaleDateString("id-ID", { day: "numeric", month: "short" })
+    })(),
+    value: d.avgResponseMs,
+  }))
+
+  const requestCountTrend = (data?.trend ?? []).map(d => ({
+    date: (() => {
+      const dt = new Date(d.period)
+      return isNaN(dt.getTime()) ? d.period : dt.toLocaleDateString("id-ID", { day: "numeric", month: "short" })
+    })(),
+    value: d.requestCount,
+  }))
+
+  const errorRateTrend = (data?.trend ?? []).map(d => ({
+    date: (() => {
+      const dt = new Date(d.period)
+      return isNaN(dt.getTime()) ? d.period : dt.toLocaleDateString("id-ID", { day: "numeric", month: "short" })
+    })(),
+    value: d.errorRate,
+  }))
+
+  const tableData = (data?.byEndpoint ?? []).map(ep => ({
+    fitur: ep.label,
+    totalPermintaan: ep.totalRequests,
+    avgWaktu: `${ep.avgResponseMs.toLocaleString("id-ID")} ms`,
+    avgWaktuDetik: `${(ep.avgResponseMs / 1000).toLocaleString("id-ID", { minimumFractionDigits: 1, maximumFractionDigits: 2 })} detik`,
+    p95Waktu: `${ep.p95Ms.toLocaleString("id-ID")} ms`,
+    p95WaktuDetik: `${(ep.p95Ms / 1000).toLocaleString("id-ID", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} detik`,
+    jumlahError: ep.errorCount,
+    tingkatError: `${ep.errorRate.toLocaleString("id-ID", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%`,
+  }))
+
+  const Skeleton = ({ h = 200 }: { h?: number }) => (
+    <div style={{
+      height: h, borderRadius: 8,
+      background: "linear-gradient(90deg,#f0f0f0 25%,#e8e8e8 50%,#f0f0f0 75%)",
+      backgroundSize: "200% 100%",
+      animation: "pt-shimmer 1.4s infinite",
+    }} />
+  )
+
   return (
+
     <div style={{ width: "100%", fontFamily: "'DM Sans', sans-serif" }}>
       <style>{`
+        @keyframes pt-shimmer {
+            0% { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+        }
         .pt-stat-row {
             display: grid;
             grid-template-columns: repeat(6, 1fr);
@@ -285,13 +398,19 @@ export default function PerformaTeknis() {
 
       {/* Stat cards */}
       <div className="pt-stat-row">
-        {DUMMY_STAT_CARDS.map((card, i) => (
-          <div key={i} className="pt-stat-card">
-            <div className="pt-stat-label">{card.label}</div>
-            <div className="pt-stat-value">{card.value}</div>
-            <div className="pt-stat-sub">{card.sub}</div>
-          </div>
-        ))}
+        {loading ? (
+            [...Array(6)].map((_, i) => (
+                <div key={i} className="pt-stat-card">
+                <Skeleton h={70} />
+                </div>
+            ))
+            ) : statCards.map((card, i) => (
+            <div key={i} className="pt-stat-card">
+                <div className="pt-stat-label">{card.label}</div>
+                <div className="pt-stat-value">{card.value}</div>
+                <div className="pt-stat-sub">{card.sub}</div>
+            </div>
+            ))}
       </div>
 
       {/* 3 charts */}
@@ -301,14 +420,14 @@ export default function PerformaTeknis() {
         <div className="pt-chart-card">
           <div className="pt-chart-title">Tren Rata-Rata Waktu Respons</div>
           <ResponsiveContainer width="100%" height={220}>
-            <LineChart data={DUMMY_RESPONSE_TIME} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+            <LineChart data={responseTimeTrend} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
               <XAxis
                 dataKey="date"
                 tick={tickStyle}
                 tickLine={false}
                 axisLine={false}
-                interval={1}
+                interval={0}
               />
               <YAxis
                 tick={tickStyle}
@@ -337,14 +456,14 @@ export default function PerformaTeknis() {
         <div className="pt-chart-card">
           <div className="pt-chart-title">Tren Jumlah Permintaan</div>
           <ResponsiveContainer width="100%" height={220}>
-            <BarChart data={DUMMY_REQUEST_COUNT} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+            <BarChart data={requestCountTrend} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
               <XAxis
                 dataKey="date"
                 tick={tickStyle}
                 tickLine={false}
                 axisLine={false}
-                interval={4}
+                interval={0}
               />
               <YAxis
                 tick={tickStyle}
@@ -365,22 +484,22 @@ export default function PerformaTeknis() {
         <div className="pt-chart-card">
           <div className="pt-chart-title">Tren Tingkat Kegagalan</div>
           <ResponsiveContainer width="100%" height={220}>
-            <LineChart data={DUMMY_ERROR_RATE} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+            <LineChart data={errorRateTrend} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
               <XAxis
                 dataKey="date"
                 tick={tickStyle}
                 tickLine={false}
                 axisLine={false}
-                interval={1}
+                interval={0}
               />
               <YAxis
                 tick={tickStyle}
                 tickLine={false}
                 axisLine={false}
                 tickFormatter={v => `${v}%`}
-                domain={[0, 6]}
-                ticks={[0, 1, 2, 3, 4, 5, 6]}
+                domain={[0, "auto"]}
+                ticks={undefined}
                 width={32}
               />
               <Tooltip content={<CustomTooltip suffix="%" />} />
@@ -415,7 +534,11 @@ export default function PerformaTeknis() {
             </tr>
           </thead>
           <tbody>
-            {DUMMY_TABLE.map((row, i) => (
+            {loading ? (
+                <tr><td colSpan={6} style={{ textAlign: "center", color: "#9ca3af", padding: 32, fontSize: 13 }}><Skeleton h={40} /></td></tr>
+            ) : tableData.length === 0 ? (
+                <tr><td colSpan={6} style={{ textAlign: "center", color: "#9ca3af", padding: 32, fontSize: 13 }}>Belum ada data</td></tr>
+            ) : tableData.map((row, i) => (
               <tr key={i}>
                 <td>{row.fitur}</td>
                 <td>{row.totalPermintaan}</td>
