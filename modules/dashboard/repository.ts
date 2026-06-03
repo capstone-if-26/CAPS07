@@ -55,6 +55,57 @@ function buildFeedbackDateCondition(params: DashboardOverviewParams) {
   return conditions.length > 0 ? and(...conditions) : undefined;
 }
 
+/** Build date condition for the period immediately before the current window. */
+function buildPrevChatDateCondition(params: DashboardOverviewParams) {
+  const { days, year, month } = params;
+  const conditions = [];
+
+  if (year) {
+    const y = parseInt(year);
+    if (month) {
+      const m = parseInt(month);
+      const prevM = m === 1 ? 12 : m - 1;
+      const prevY = m === 1 ? y - 1 : y;
+      conditions.push(sql`extract(year from ${chats.createdAt}) = ${prevY}`);
+      conditions.push(sql`extract(month from ${chats.createdAt}) = ${prevM}`);
+    } else {
+      conditions.push(sql`extract(year from ${chats.createdAt}) = ${y - 1}`);
+    }
+  } else {
+    const d = days === "7" ? 7 : 30;
+    const d2 = d * 2;
+    conditions.push(sql`${chats.createdAt} >= now() - (${d2} * interval '1 day')`);
+    conditions.push(sql`${chats.createdAt} < now() - (${d} * interval '1 day')`);
+  }
+
+  return conditions.length > 0 ? and(...conditions) : undefined;
+}
+
+function buildPrevFeedbackDateCondition(params: DashboardOverviewParams) {
+  const { days, year, month } = params;
+  const conditions = [];
+
+  if (year) {
+    const y = parseInt(year);
+    if (month) {
+      const m = parseInt(month);
+      const prevM = m === 1 ? 12 : m - 1;
+      const prevY = m === 1 ? y - 1 : y;
+      conditions.push(sql`extract(year from ${messageFeedbacks.createdAt}) = ${prevY}`);
+      conditions.push(sql`extract(month from ${messageFeedbacks.createdAt}) = ${prevM}`);
+    } else {
+      conditions.push(sql`extract(year from ${messageFeedbacks.createdAt}) = ${y - 1}`);
+    }
+  } else {
+    const d = days === "7" ? 7 : 30;
+    const d2 = d * 2;
+    conditions.push(sql`${messageFeedbacks.createdAt} >= now() - (${d2} * interval '1 day')`);
+    conditions.push(sql`${messageFeedbacks.createdAt} < now() - (${d} * interval '1 day')`);
+  }
+
+  return conditions.length > 0 ? and(...conditions) : undefined;
+}
+
 /** year-only → monthly buckets; everything else (days / year+month) → daily */
 function resolvePeriodGranularity(params: DashboardOverviewParams) {
   const byMonth = !!params.year && !params.month;
@@ -107,6 +158,38 @@ export async function getDashboardOverviewLikeRate(
   params: DashboardOverviewParams,
 ) {
   const where = buildFeedbackDateCondition(params);
+
+  const result = await db
+    .select({
+      likes: sql<number>`sum(case when ${messageFeedbacks.feedback} = 'like' then 1 else 0 end)::int`,
+      total: sql<number>`count(${messageFeedbacks.id})::int`,
+    })
+    .from(messageFeedbacks)
+    .where(where);
+
+  return result[0];
+}
+
+export async function getDashboardOverviewSummaryPrev(
+  params: DashboardOverviewParams,
+) {
+  const where = buildPrevChatDateCondition(params);
+
+  const result = await db
+    .select({
+      totalChats: sql<number>`count(${chats.id})::int`,
+      resolvedChats: sql<number>`sum(case when ${chats.isResolved} = true then 1 else 0 end)::int`,
+    })
+    .from(chats)
+    .where(where);
+
+  return result[0];
+}
+
+export async function getDashboardOverviewLikeRatePrev(
+  params: DashboardOverviewParams,
+) {
+  const where = buildPrevFeedbackDateCondition(params);
 
   const result = await db
     .select({
@@ -227,6 +310,20 @@ export async function getUserMessageContents(
 
 export async function getFeedbackOverall(params: DashboardOverviewParams) {
   const where = buildFeedbackDateCondition(params);
+
+  const result = await db
+    .select({
+      likes: sql<number>`sum(case when ${messageFeedbacks.feedback} = 'like' then 1 else 0 end)::int`,
+      dislikes: sql<number>`sum(case when ${messageFeedbacks.feedback} = 'dislike' then 1 else 0 end)::int`,
+    })
+    .from(messageFeedbacks)
+    .where(where);
+
+  return result[0];
+}
+
+export async function getFeedbackOverallPrev(params: DashboardOverviewParams) {
+  const where = buildPrevFeedbackDateCondition(params);
 
   const result = await db
     .select({

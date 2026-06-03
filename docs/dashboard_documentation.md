@@ -61,8 +61,14 @@ Menggunakan filter waktu standar di atas.
   "message": "Berhasil mengambil overview dashboard",
   "data": {
     "totalChats": 142,
+    "resolvedChats": 96,
+    "totalChatsChange": 18.33,
     "completionRate": 67.61,
-    "likePercentage": 82.35,
+    "completionRateChange": 3.21,
+    "likePercentage": 62.50,
+    "satisfactionLevel": "puas",
+    "satisfactionLabel": "Puas",
+    "satisfactionThreshold": 50,
     "intents": [
       {
         "intent": "Cek Legalitas Pinjol/Investasi",
@@ -80,13 +86,13 @@ Menggunakan filter waktu standar di atas.
         "period": "2026-04-23",
         "totalChats": 12,
         "completionRate": 66.67,
-        "likePercentage": 80.00
+        "likePercentage": 60.00
       },
       {
         "period": "2026-04-24",
         "totalChats": 9,
         "completionRate": 77.78,
-        "likePercentage": 100.00
+        "likePercentage": 71.43
       }
     ]
   }
@@ -95,23 +101,64 @@ Menggunakan filter waktu standar di atas.
 
 ### Keterangan Field
 
-**Aggregate (angka tunggal)**
+**Aggregate — volume chat**
+
+| Field | Tipe | Deskripsi |
+| :--- | :--- | :--- |
+| `totalChats` | `number` | Total sesi chat dalam rentang waktu |
+| `resolvedChats` | `number` | Jumlah chat yang `is_resolved = true` |
+| `totalChatsChange` | `number \| null` | Perubahan relatif dibanding periode sebelumnya dalam persen, mis. `+18.33` = naik 18,33%. `null` jika periode sebelumnya tidak ada data |
+
+**Aggregate — completion rate**
+
+| Field | Tipe | Deskripsi |
+| :--- | :--- | :--- |
+| `completionRate` | `number` | Persentase chat yang `is_resolved = true` (`resolvedChats / totalChats × 100`) |
+| `completionRateChange` | `number` | Selisih persentase poin dibanding periode sebelumnya, mis. `+3.21` = naik 3,21 pp. Dapat bernilai negatif |
+
+**Aggregate — kepuasan (like percentage)**
+
+| Field | Tipe | Deskripsi |
+| :--- | :--- | :--- |
+| `likePercentage` | `number` | Persentase *like* dari seluruh feedback yang tercatat (termasuk *none*) |
+| `satisfactionLevel` | `string` | Kunci level kepuasan (lihat tabel tier di bawah) |
+| `satisfactionLabel` | `string` | Label tampilan dalam Bahasa Indonesia |
+| `satisfactionThreshold` | `number` | Persentase minimum untuk level tersebut |
+
+**Tier kepuasan `likePercentage`:**
+
+| `satisfactionLevel` | `satisfactionLabel` | `satisfactionThreshold` |
+| :--- | :--- | :--- |
+| `sangat_puas` | Sangat Puas | 70% |
+| `puas` | Puas | 50% |
+| `cukup` | Cukup | 30% |
+| `kurang` | Kurang | 0% |
+
+**Periode perbandingan (previous period):**
+
+| Filter aktif | Periode sebelumnya yang dibandingkan |
+| :--- | :--- |
+| `days=7` | 7 hari sebelum periode saat ini |
+| `days=30` (default) | 30 hari sebelum periode saat ini |
+| `year=YYYY` | Tahun `YYYY - 1` |
+| `year=YYYY&month=MM` | Bulan sebelumnya (Januari → Desember tahun sebelumnya) |
+
+**`intents[]`**
 
 | Field | Deskripsi |
 | :--- | :--- |
-| `totalChats` | Total jumlah sesi chat dalam rentang waktu |
-| `completionRate` | Persentase chat dengan `is_resolved = true` dari semua chat |
-| `likePercentage` | Persentase *like* dari seluruh feedback yang ada (termasuk *none*) |
-| `intents[].percentage` | Persentase intent tersebut dari total chat, dibulatkan 2 desimal |
+| `intent` | Nama intent OJK |
+| `count` | Jumlah chat dengan intent tersebut |
+| `percentage` | Persentase dari total chat, dibulatkan 2 desimal |
 
-**Trend (per periode)**
+**`trend[]` (per periode)**
 
 | Field | Deskripsi |
 | :--- | :--- |
-| `trend[].period` | Label periode sesuai granularitas (lihat tabel di atas) |
+| `trend[].period` | Label periode sesuai granularitas (lihat tabel Filter Waktu) |
 | `trend[].totalChats` | Jumlah sesi chat pada periode tersebut |
-| `trend[].completionRate` | Completion rate pada periode tersebut (`resolvedChats / totalChats × 100`) |
-| `trend[].likePercentage` | Persentase *like* pada periode tersebut; `0` jika tidak ada feedback pada periode tersebut |
+| `trend[].completionRate` | Completion rate pada periode tersebut |
+| `trend[].likePercentage` | Persentase *like* pada periode tersebut; `0` jika tidak ada feedback |
 
 > **Catatan:** `trend` dibentuk dari penggabungan data chat dan feedback per periode. Periode yang memiliki data chat tetapi tidak ada feedback akan tetap muncul dengan `likePercentage: 0`.
 
@@ -220,9 +267,13 @@ Menggunakan filter waktu standar di atas.
   "message": "Berhasil mengambil data feedback",
   "data": {
     "csat": 84.21,
+    "csatChange": 6.35,
     "totalFeedback": 76,
+    "totalFeedbackChange": 22.58,
     "likes": 64,
     "dislikes": 12,
+    "likeRate": 84.21,
+    "dislikeRate": 15.79,
     "csatByIntent": [
       {
         "intent": "Cek Legalitas Pinjol/Investasi",
@@ -250,14 +301,25 @@ Menggunakan filter waktu standar di atas.
 
 ### Keterangan Field
 
-**Aggregate (angka tunggal)**
+**Aggregate — CSAT**
 
-| Field | Deskripsi |
-| :--- | :--- |
-| `csat` | CSAT keseluruhan: `likes / (likes + dislikes) × 100`, dibulatkan 2 desimal. `0` jika belum ada feedback |
-| `totalFeedback` | Total feedback yang diberikan (`likes + dislikes`, tidak termasuk `'none'`) |
-| `likes` | Jumlah feedback *like* |
-| `dislikes` | Jumlah feedback *dislike* |
+| Field | Tipe | Deskripsi |
+| :--- | :--- | :--- |
+| `csat` | `number` | CSAT keseluruhan: `likes / (likes + dislikes) × 100`, dibulatkan 2 desimal. `0` jika belum ada feedback |
+| `csatChange` | `number \| null` | Perubahan relatif CSAT dibanding periode sebelumnya dalam persen, mis. `+6.35` = naik 6,35%. `null` jika CSAT periode sebelumnya = 0 |
+
+**Aggregate — volume feedback**
+
+| Field | Tipe | Deskripsi |
+| :--- | :--- | :--- |
+| `totalFeedback` | `number` | Total feedback yang diberikan (`likes + dislikes`, tidak termasuk `'none'`) |
+| `totalFeedbackChange` | `number \| null` | Perubahan relatif volume feedback dibanding periode sebelumnya. `null` jika periode sebelumnya tidak ada data |
+| `likes` | `number` | Jumlah feedback *like* |
+| `dislikes` | `number` | Jumlah feedback *dislike* |
+| `likeRate` | `number` | Persentase *like* dari `totalFeedback`: `likes / (likes + dislikes) × 100` |
+| `dislikeRate` | `number` | Persentase *dislike* dari `totalFeedback`: `dislikes / (likes + dislikes) × 100` |
+
+> `likeRate + dislikeRate = 100`. Keduanya `0` jika `totalFeedback = 0`.
 
 **`csatByIntent[]`**
 
