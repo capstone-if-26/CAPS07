@@ -1,12 +1,15 @@
 import {
   getDashboardOverviewSummary,
+  getDashboardOverviewSummaryPrev,
   getDashboardOverviewIntents,
   getDashboardOverviewLikeRate,
+  getDashboardOverviewLikeRatePrev,
   getOverviewTrendChats,
   getOverviewTrendFeedbacks,
   getSessionAnalysisStats,
   getUserMessageContents,
   getFeedbackOverall,
+  getFeedbackOverallPrev,
   getFeedbackByIntent,
   getFeedbackTrend,
   getPerformanceSummaryOverall,
@@ -176,19 +179,65 @@ function computeCsat(likes: number, dislikes: number): number {
 }
 
 // ---------------------------------------------------------------------------
+// Satisfaction tier helper
+// ---------------------------------------------------------------------------
+
+const SATISFACTION_TIERS = [
+  { level: "sangat_puas", label: "Sangat Puas", minThreshold: 70 },
+  { level: "puas",        label: "Puas",        minThreshold: 50 },
+  { level: "cukup",       label: "Cukup",       minThreshold: 30 },
+  { level: "kurang",      label: "Kurang",       minThreshold: 0  },
+] as const;
+
+type SatisfactionLevel = (typeof SATISFACTION_TIERS)[number]["level"];
+
+function getSatisfactionInfo(likePercentage: number): {
+  level: SatisfactionLevel;
+  label: string;
+  minThreshold: number;
+} {
+  return (
+    SATISFACTION_TIERS.find((t) => likePercentage >= t.minThreshold) ??
+    SATISFACTION_TIERS[SATISFACTION_TIERS.length - 1]
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Percentage change helpers
+// ---------------------------------------------------------------------------
+
+/** Relative change: (curr - prev) / prev × 100. Returns null when prev = 0. */
+function relativeChange(curr: number, prev: number): number | null {
+  if (prev === 0) return null;
+  return Number((((curr - prev) / prev) * 100).toFixed(2));
+}
+
+/** Absolute percentage-point difference. */
+function pointChange(curr: number, prev: number): number {
+  return Number((curr - prev).toFixed(2));
+}
+
+// ---------------------------------------------------------------------------
 // Service functions
 // ---------------------------------------------------------------------------
 
 export async function getDashboardOverview(params: DashboardOverviewParams) {
-  const [summary, intents, likeData, trendChats, trendFeedbacks] =
-    await Promise.all([
-      getDashboardOverviewSummary(params),
-      getDashboardOverviewIntents(params),
-      getDashboardOverviewLikeRate(params),
-      getOverviewTrendChats(params),
-      getOverviewTrendFeedbacks(params),
-    ]);
+  const [
+    summary, prevSummary,
+    intents,
+    likeData, prevLikeData,
+    trendChats, trendFeedbacks,
+  ] = await Promise.all([
+    getDashboardOverviewSummary(params),
+    getDashboardOverviewSummaryPrev(params),
+    getDashboardOverviewIntents(params),
+    getDashboardOverviewLikeRate(params),
+    getDashboardOverviewLikeRatePrev(params),
+    getOverviewTrendChats(params),
+    getOverviewTrendFeedbacks(params),
+  ]);
 
+  // ── Current period rates ──────────────────────────────────────────────────
   const completionRate =
     summary.totalChats > 0
       ? Number(((summary.resolvedChats / summary.totalChats) * 100).toFixed(2))
@@ -199,7 +248,20 @@ export async function getDashboardOverview(params: DashboardOverviewParams) {
       ? Number(((likeData.likes / likeData.total) * 100).toFixed(2))
       : 0;
 
-  // Merge chat trend with feedback trend keyed on period
+  // ── Previous period rates ─────────────────────────────────────────────────
+  const prevCompletionRate =
+    prevSummary.totalChats > 0
+      ? Number(((prevSummary.resolvedChats / prevSummary.totalChats) * 100).toFixed(2))
+      : 0;
+
+  // ── Changes ───────────────────────────────────────────────────────────────
+  const totalChatsChange = relativeChange(summary.totalChats, prevSummary.totalChats);
+  const completionRateChange = pointChange(completionRate, prevCompletionRate);
+
+  // ── Satisfaction tier ─────────────────────────────────────────────────────
+  const satisfaction = getSatisfactionInfo(likePercentage);
+
+  // ── Trend (merge chat + feedback by period) ───────────────────────────────
   const feedbackByPeriod = new Map(trendFeedbacks.map((r) => [r.period, r]));
 
   const trend = trendChats.map((r) => {
@@ -220,8 +282,14 @@ export async function getDashboardOverview(params: DashboardOverviewParams) {
 
   return {
     totalChats: summary.totalChats,
+    resolvedChats: summary.resolvedChats,
+    totalChatsChange,
     completionRate,
+    completionRateChange,
     likePercentage,
+    satisfactionLevel: satisfaction.level,
+    satisfactionLabel: satisfaction.label,
+    satisfactionThreshold: satisfaction.minThreshold,
     intents: intents.map((row) => ({
       intent: row.intent,
       count: row.count,
@@ -232,20 +300,37 @@ export async function getDashboardOverview(params: DashboardOverviewParams) {
 }
 
 export async function getDashboardFeedback(params: DashboardOverviewParams) {
-  const [overall, byIntent, trend] = await Promise.all([
+  const [overall, prevOverall, byIntent, trend] = await Promise.all([
     getFeedbackOverall(params),
+    getFeedbackOverallPrev(params),
     getFeedbackByIntent(params),
     getFeedbackTrend(params),
   ]);
 
   const totalFeedback = overall.likes + overall.dislikes;
+  const prevTotalFeedback = prevOverall.likes + prevOverall.dislikes;
+
   const csat = computeCsat(overall.likes, overall.dislikes);
+  const prevCsat = computeCsat(prevOverall.likes, prevOverall.dislikes);
+
+  const likeRate =
+    totalFeedback > 0
+      ? Number(((overall.likes / totalFeedback) * 100).toFixed(2))
+      : 0;
+  const dislikeRate =
+    totalFeedback > 0
+      ? Number(((overall.dislikes / totalFeedback) * 100).toFixed(2))
+      : 0;
 
   return {
     csat,
+    csatChange: relativeChange(csat, prevCsat),
     totalFeedback,
+    totalFeedbackChange: relativeChange(totalFeedback, prevTotalFeedback),
     likes: overall.likes,
     dislikes: overall.dislikes,
+    likeRate,
+    dislikeRate,
     csatByIntent: byIntent.map((row) => ({
       intent: row.intent,
       likes: row.likes,
