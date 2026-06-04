@@ -7,6 +7,10 @@ import ReactMarkdown from "react-markdown";
 import { markdownComponents } from "./react-markdown";
 import remarkGfm from "remark-gfm";
 
+import { useState } from "react"
+import { submitFeedback } from "@/lib/api/chat"
+import Image from "next/image"
+
 export type FlowStep = {
   id: string;
   question: string;

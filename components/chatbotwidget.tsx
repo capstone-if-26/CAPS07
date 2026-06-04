@@ -363,6 +363,21 @@ function loadRiwayat(): ChatHistory[] {
   }
 }
 
+const RIWAYAT_KEY = "ojk_riwayat_list"
+
+function saveRiwayat(list: ChatHistory[]) {
+  localStorage.setItem(RIWAYAT_KEY, JSON.stringify(list))
+}
+
+function loadRiwayat(): ChatHistory[] {
+  try {
+    const raw = localStorage.getItem(RIWAYAT_KEY)
+    return raw ? JSON.parse(raw) : []
+  } catch {
+    return []
+  }
+}
+
 type ChatbotWidgetProps = {
   onClose: () => void;
 };
@@ -470,6 +485,10 @@ export default function ChatbotWidget({ onClose }: ChatbotWidgetProps) {
   useEffect(() => {
     saveRiwayat(riwayatList);
   }, [riwayatList]);
+
+  useEffect(() => {
+  saveRiwayat(riwayatList)
+  }, [riwayatList])
 
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setInput(e.target.value);
