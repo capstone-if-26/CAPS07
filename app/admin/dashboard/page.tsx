@@ -30,8 +30,14 @@ type OverviewTrend = {
 
 type OverviewData = {
   totalChats: number
+  resolvedChats: number
+  totalChatsChange: number | null
   completionRate: number
+  completionRateChange: number | null
   likePercentage: number
+  satisfactionLevel: string
+  satisfactionLabel: string
+  satisfactionThreshold: number
   intents: OverviewIntent[]
   trend: OverviewTrend[]
 }
@@ -178,7 +184,11 @@ return (
   )
 }
 
+const MINI_BAR_LABELS = ["Minggu 1", "Minggu 2", "Minggu 3", "Minggu 4"]
+
 function MiniBar({ data }: { data: number[] }) {
+  const [hoveredIdx, setHoveredIdx] = useState<number | null>(null)
+
   const getColor = (value: number) => {
     if (value >= 85) return "#B00020"
     if (value >= 70) return "#D66B7A"
@@ -198,14 +208,49 @@ function MiniBar({ data }: { data: number[] }) {
       {data.map((value, i) => (
         <div
           key={i}
-          style={{
-            flex: 1,
-            height: `${Math.max(value * 0.45, 10)}px`,
-            background: getColor(value),
-            borderRadius: 4,
-            transition: "all 0.3s ease",
-          }}
-        />
+          style={{ flex: 1, position: "relative" }}
+          onMouseEnter={() => setHoveredIdx(i)}
+          onMouseLeave={() => setHoveredIdx(null)}
+        >
+          {hoveredIdx === i && (
+            <div style={{
+              position: "absolute",
+              bottom: "calc(100% + 6px)",
+              left: "50%",
+              transform: "translateX(-50%)",
+              background: "#1f2937",
+              color: "#fff",
+              fontSize: 10,
+              fontWeight: 600,
+              padding: "3px 7px",
+              borderRadius: 5,
+              whiteSpace: "nowrap",
+              zIndex: 99,
+              pointerEvents: "none",
+            }}>
+              {MINI_BAR_LABELS[i]}: {value}%
+              <div style={{
+                position: "absolute",
+                top: "100%",
+                left: "50%",
+                transform: "translateX(-50%)",
+                width: 0, height: 0,
+                borderLeft: "4px solid transparent",
+                borderRight: "4px solid transparent",
+                borderTop: "4px solid #1f2937",
+              }} />
+            </div>
+          )}
+          <div
+            style={{
+              height: `${Math.max(value * 0.45, 10)}px`,
+              background: getColor(value),
+              borderRadius: 4,
+              transition: "all 0.3s ease",
+              cursor: "pointer",
+            }}
+          />
+        </div>
       ))}
     </div>
   )
@@ -342,25 +387,17 @@ useEffect(() => { fetchAll() }, [fetchAll])
 
 
   // Derived values
-  const totalSesi = overview?.totalChats ?? 0
-  const avgRate = overview?.completionRate ?? 0
-  const csatPct = overview?.likePercentage ?? 0
-  const resolvedTotal = Math.round(totalSesi * avgRate / 100)
-  const unhandled = totalSesi - resolvedTotal
-  const coveragePct = avgRate
-  const trend = 12.5 // tidak tersedia dari overview, tetap dummy
+  const totalSesi = overview?.totalChats ?? 0                             // total sesi
+  const avgRate = overview?.completionRate ?? 0                           // presentase berhasil
+  const csatPct = overview?.likePercentage ?? 0                           // tingkat kepuasan
+  const resolvedTotal = overview?.resolvedChats ?? 0                      // jumlah cht selesai
+  const unhandled = totalSesi - resolvedTotal                             // pending
+  const coveragePct = avgRate                                             // cakupan pertanyaan
+  const trend = overview?.totalChatsChange ?? null                        // badge % naik/turun total sesi
+  const completionRateChange = overview?.completionRateChange ?? null     // badge % naik/turun persentase berhasil
+  const satisfactionLabel = overview?.satisfactionLabel ?? "Puas"         // label badge tingkat kepuasan
 
-  // Intent pie data
-  // const intentMap: Record<string, number> = {}
-  //stats?.topIntents?.forEach(d => {
-    //intentMap[d.intent] = (intentMap[d.intent] ?? 0) + d.count
-  //})
-  //const intentTotal = Object.values(intentMap).reduce((s, v) => s + v, 0)
-  //const intentEntries = Object.entries(intentMap).sort((a, b) => b[1] - a[1])
-  //const pieData = intentEntries.slice(0, 3).map(([name, value]) => ({ name, value }))
-  //const othersVal = intentEntries.slice(3).reduce((s, [, v]) => s + v, 0)
-  //if (othersVal > 0) pieData.push({ name: "Lainnya", value: othersVal })
-  // Intent pie data — DUMMY DATA
+ 
   const intents = overview?.intents ?? []
   const intentTotal = intents.reduce((s, d) => s + d.count, 0)
 
@@ -770,7 +807,7 @@ useEffect(() => { fetchAll() }, [fetchAll])
           .stat-row { grid-template-columns: 1fr; gap: 10px; margin-bottom: 14px; }
           .charts-row { grid-template-columns: 1fr; gap: 10px; margin-bottom: 10px; }
           .bottom-row { grid-template-columns: 1fr; gap: 10px; }
-          .chart-card { padding: 14px 14px; }
+          .chart-card { padding: 14px 14px; overflow: hidden; }
           .topbar { padding: 10px 14px; gap: 8px; left: 0;}
           .topbar-title { font-size: 15px; }
           .user-pill-text { display: none; }
@@ -792,29 +829,86 @@ useEffect(() => { fetchAll() }, [fetchAll])
           left: 0;
           right: 0;
           background: #fff;
-          border-top: 1px solid #f0f0f0;
+          border-top: 1px solid #e5e7eb;
           z-index: 200;
-          padding: 6px 0 10px;
-          justify-content: space-around;
-          align-items: center;
-          box-shadow: 0 -2px 12px rgba(0,0,0,0.07);
+          height: 72px;
+          padding: 4px 6px env(safe-area-inset-bottom);
+          justify-content: space-between;
+          align-items: stretch;
+          box-shadow: 0 -2px 10px rgba(0,0,0,0.06);
         }
+
         .mobile-nav-item {
+          flex: 1;
+          min-width: 0;
+
           display: flex;
           flex-direction: column;
           align-items: center;
-          gap: 3px;
-          padding: 4px 10px;
-          cursor: pointer;
-          color: #9ca3af;
-          font-size: 10px;
-          font-weight: 500;
+          justify-content: center;
+
+          gap: 4px;
+          padding: 6px 2px;
+
           border: none;
-          background: none;
+          background: transparent;
+          cursor: pointer;
+
+          color: #9ca3af;
+          transition: all 0.2s ease;
+
           font-family: 'DM Sans', sans-serif;
-          transition: color 0.15s;
         }
-        .mobile-nav-item.active { color: #8C0000; }
+
+        .mobile-nav-item.active {
+          color: #8C0000;
+        }
+
+        .mobile-nav-item .nav-icon {
+          width: 24px;
+          height: 24px;
+
+          display: flex;
+          align-items: center;
+          justify-content: center;
+
+          flex-shrink: 0;
+        }
+
+        .mobile-nav-item span:last-child {
+          font-size: 9px;
+          font-weight: 600;
+          line-height: 1.15;
+
+          text-align: center;
+
+          display: -webkit-box;
+          -webkit-line-clamp: 2;
+          -webkit-box-orient: vertical;
+
+          overflow: hidden;
+
+          min-height: 22px;
+          max-width: 72px;
+
+          word-break: break-word;
+        }
+
+        @media (max-width: 400px) {
+          .mobile-nav {
+            height: 68px;
+          }
+
+          .mobile-nav-item span:last-child {
+            font-size: 8px;
+            max-width: 60px;
+          }
+
+          .mobile-nav-item .nav-icon svg {
+            width: 18px;
+            height: 18px;
+          }
+        }
       `}</style>
 
       <div className="dash-layout">
@@ -968,12 +1062,12 @@ useEffect(() => { fetchAll() }, [fetchAll])
 
             {/* Stat cards */}
             <div className="stat-row">
-              {/* Total Sesi */}
+              {/* Total sesi */}
               <StatCard
                 label="Total Sesi"
                 value={loading ? "—" : totalSesi.toLocaleString("id-ID")}
-                badge={loading ? undefined : `+${trend.toLocaleString("id-ID", { maximumFractionDigits: 1 })}%`}
-                badgeType="positive"
+                badge={loading || trend === null ? undefined : `${trend > 0 ? "+" : ""}${trend.toLocaleString("id-ID", { maximumFractionDigits: 1 })}%`}
+                badgeType={trend === null ? "neutral" : trend >= 0 ? "positive" : "negative"}
                 sub1={loading ? undefined : `Resolved: ${fmtNum(resolvedTotal)}`}
                 sub2={loading ? undefined : `Bulan ini: ${fmtNum(totalSesi)}`}
               >
@@ -986,12 +1080,12 @@ useEffect(() => { fetchAll() }, [fetchAll])
               )}
               </StatCard>
 
-              {/* Persentase Berhasil */}
+              {/* Persentase berhasil */}
               <StatCard
                 label="Persentase Berhasil"
                 value={loading ? "—" : `${avgRate.toLocaleString("id-ID", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`}
-                badge="+2,1%"
-                badgeType="positive"
+                badge={completionRateChange === null ? undefined : `${completionRateChange > 0 ? "+" : ""}${completionRateChange.toLocaleString("id-ID", { maximumFractionDigits: 1 })}%`}
+                badgeType={completionRateChange === null ? "neutral" : completionRateChange >= 0 ? "positive" : "negative"}
               >
                 {loading ? (
                   <div className="skeleton" style={{ height: 8, width: "100%", marginBottom: 4 }} />
@@ -1000,26 +1094,27 @@ useEffect(() => { fetchAll() }, [fetchAll])
                 )}
               </StatCard>
 
-              {/* Tingkat Kepuasan */}
+              {/* Tingkat kepuasan */}
               <StatCard
                 label="Tingkat Kepuasan"
                 value={loading ? "—" : `${csatPct.toLocaleString("id-ID", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`}
                 badge={
-                <>
-                  <Image
-                    src="/high.png"
-                    alt="high"
-                    width={10}
-                    height={10}
-                  />
-                  Tinggi
-                </>
-              }
-                badgeType="positive"
+                  <>
+                    <Image
+                      src="/high.png"
+                      alt="high"
+                      width={10}
+                      height={10}
+                    />
+                    {satisfactionLabel}
+                  </>
+                }
+                badgeType={csatPct >= 70 ? "positive" : csatPct >= 50 ? "neutral" : "negative"}
                 sub1={loading ? undefined : "User puas terhadap layanan"}
               />
+              
 
-              {/* Cakupan Pertanyaan */}
+              {/* Cakupan pertanyaan */}
               <StatCard
                 label="Cakupan Pertanyaan"
                 value={loading ? "—" : `${Number(coveragePct).toLocaleString("id-ID")}%`}
@@ -1149,14 +1244,16 @@ useEffect(() => { fetchAll() }, [fetchAll])
                   ))}
                 </div>
               ) : (
+                <div style={{ width: "100%", overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
                 <table style={{
-              width: "100%",
-              borderCollapse: "separate",
-              borderSpacing: 0,
-              border: "1.5px solid #e5e7eb",
-              borderRadius: 12,
-              overflow: "hidden",
-            }}>
+                  width: "100%",
+                  minWidth: 480,
+                  borderCollapse: "separate",
+                  borderSpacing: 0,
+                  border: "1.5px solid #e5e7eb",
+                  borderRadius: 12,
+                  overflow: "hidden",
+                }}>
                   <thead>
                     <tr>
                       {["Rank", "Intent", "Query", "%", "Trend"].map((h, i) => (
@@ -1187,43 +1284,44 @@ useEffect(() => { fetchAll() }, [fetchAll])
                             {row.intent}
                           </td>
                           <td style={{
-              padding: "16px",
-              fontSize: 14,
-              color: "#374151",
-              borderBottom: "1.5px solid #e5e7eb",
-              textAlign: "center",
-            }}>
-              {row.count.toLocaleString("id-ID")}
-            </td>
+                            padding: "16px",
+                            fontSize: 14,
+                            color: "#374151",
+                            borderBottom: "1.5px solid #e5e7eb",
+                            textAlign: "center",
+                          }}>
+                            {row.count.toLocaleString("id-ID")}
+                          </td>
                           <td style={{ padding: "16px", fontSize: 14, color: "#374151", borderBottom: "1.5px solid #e5e7eb", }}>
                             {row.pct}%
                           </td>
                           <td style={{ padding: "16px", borderBottom: "1.5px solid #e5e7eb", }}>
-              <div style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: 6,
-            }}>
-                <span style={{ fontSize: 16, lineHeight: 1, color: trendUp ? "#16a34a" : "#dc2626" }}>
-                  {trendUp ? "↑" : "↓"}
-                </span>
-                <span style={{ fontSize: 13, fontWeight: 700, color: trendUp ? "#16a34a" : "#dc2626" }}>
-                  {trendPct}%
-                </span>
-              </div>
-            </td>
-            </tr>
-          )
-        }) : (
-          <tr><td colSpan={5} style={{ textAlign: "center", color: "#9ca3af", padding: 32, fontSize: 13 }}>Belum ada data</td></tr>
-        )}
-      </tbody>
-    </table>
-  )}
-</div>
+                          <div style={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          gap: 6,
+                        }}>
+                            <span style={{ fontSize: 16, lineHeight: 1, color: trendUp ? "#16a34a" : "#dc2626" }}>
+                              {trendUp ? "↑" : "↓"}
+                            </span>
+                            <span style={{ fontSize: 13, fontWeight: 700, color: trendUp ? "#16a34a" : "#dc2626" }}>
+                              {trendPct}%
+                            </span>
+                          </div>
+                        </td>
+                        </tr>
+                      )
+                    }) : (
+                      <tr><td colSpan={5} style={{ textAlign: "center", color: "#9ca3af", padding: 32, fontSize: 13 }}>Belum ada data</td></tr>
+                    )}
+                  </tbody>
+                </table>
+                </div> 
+              )}
+            </div>
 
-              {/* Word Cloud Pertanyaan */}
+              {/* Word cloud pertanyaan */}
             <div className="chart-card" style={{ display: "flex", flexDirection: "column" }}>
               <div className="chart-title">Word Cloud Pertanyaan</div>
               <div className="chart-sub">Free-text queries paling populer</div>
@@ -1269,21 +1367,27 @@ useEffect(() => { fetchAll() }, [fetchAll])
         </div>
       </div>
 
-      {/* Mobile Bottom Nav */}
+      {/* Mobile bottom nav */}
       <nav className="mobile-nav">
         {[
-          { icon: "grid", label: "Dashboard", active: true },
-          { icon: "chat", label: "Chat" },
-          { icon: "heart", label: "Feedback" },
-          { icon: "pie", label: "Analytics" },
-          { icon: "doc", label: "Dokumen" },
+          { icon: "grid",  label: "Overview",                    menu: "Overview" },
+          { icon: "chat",  label: "Intent dan Sesi Chat",        menu: "Intent dan Sesi Chat" },
+          { icon: "heart", label: "User Feedback dan CSAT",      menu: "User Feedback dan CSAT" },
+          { icon: "pie",   label: "Performa dan Teknis",         menu: "Performa dan Teknis" },
+          { icon: "doc",   label: "Dokumen",                     menu: "Dokumen" },
         ].map((item) => (
-          <button key={item.icon} className={`mobile-nav-item${item.active ? " active" : ""}`}>
-            {item.icon === "grid" && <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>}
-            {item.icon === "chat" && <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>}
+          <button
+            key={item.icon}
+            className={`mobile-nav-item${activeMenu === item.menu ? " active" : ""}`}
+            onClick={() => handleMenuChange(item.menu)}
+          >
+            <span className="nav-icon">
+            {item.icon === "grid"  && <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>}
+            {item.icon === "chat"  && <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>}
             {item.icon === "heart" && <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>}
-            {item.icon === "pie" && <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21.21 15.89A10 10 0 1 1 8 2.83"/><path d="M22 12A10 10 0 0 0 12 2v10z"/></svg>}
-            {item.icon === "doc" && <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>}
+            {item.icon === "pie"   && <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21.21 15.89A10 10 0 1 1 8 2.83"/><path d="M22 12A10 10 0 0 0 12 2v10z"/></svg>}
+            {item.icon === "doc"   && <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>}
+            </span>
             <span>{item.label}</span>
           </button>
         ))}

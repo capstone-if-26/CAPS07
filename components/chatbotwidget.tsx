@@ -398,7 +398,6 @@ export default function ChatbotWidget({ onClose }: ChatbotWidgetProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const dotMenuRef = useRef<HTMLDivElement>(null);
 
-  // Selalu mulai chat baru saat pertama load
   useEffect(() => {
     const savedId = getSavedChatId();
     if (savedId) {
