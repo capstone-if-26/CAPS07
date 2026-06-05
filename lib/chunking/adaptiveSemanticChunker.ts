@@ -1,5 +1,4 @@
 import * as crypto from "crypto";
-import type { FeatureExtractionPipeline } from "@huggingface/transformers";
 import {
   ChunkerConfig,
   ChunkMetadata,
@@ -10,6 +9,11 @@ import path from "path";
 import { getModuleLogger } from "@/lib/utils/logger";
 
 const log = getModuleLogger("lib/chunking/adaptiveSemanticChunker");
+
+const HF_MODEL_URL =
+  "https://api-inference.huggingface.co/models/intfloat/multilingual-e5-small";
+// HuggingFace Inference API typically handles up to ~64 short texts per request
+const EMBED_BATCH_SIZE = 64;
 
 export class AdaptiveSemanticChunker {
   private readonly sourceInput: string | Buffer;
@@ -24,14 +28,10 @@ export class AdaptiveSemanticChunker {
   private readonly status: string;
   private fileHash: string = "";
 
-  private static readonly MODEL_NAME =
-    process.env.EMBEDDING_MODEL || "Xenova/multilingual-e5-small";
   private static readonly STD_MULTIPLIER = 0.5;
   private static readonly OVERLAP_SENTENCES = 1;
   private static readonly MIN_CHUNK_SIZE = 150;
   private static readonly MAX_CHUNK_SIZE = 1500;
-
-  private extractor: FeatureExtractionPipeline | null = null;
 
   constructor(config: ChunkerConfig) {
     const validDocTypes = new Set<DocType>([
@@ -65,31 +65,10 @@ export class AdaptiveSemanticChunker {
   }
 
   public async initialize(): Promise<void> {
-    if (!this.extractor) {
-      // Dynamic import so the heavy package is only loaded when the chunker is used.
-      // On Vercel the build system aliases this to transformers.web.js (WASM-only).
-      // On regular servers it loads the native Node.js build (onnxruntime-node).
-      const { pipeline, env } = await import("@huggingface/transformers");
-
-      if (process.env.VERCEL) {
-        // /tmp is the only writable directory on Vercel Lambda. Without this,
-        // model downloads would fail because the default ~/.cache path is read-only.
-        env.cacheDir = "/tmp/hf-cache";
-      }
-
-      log.debug(
-        { model: AdaptiveSemanticChunker.MODEL_NAME },
-        "chunking.semantic_model_loading",
-      );
-
-      this.extractor = (await pipeline(
-        "feature-extraction",
-        AdaptiveSemanticChunker.MODEL_NAME,
-      )) as FeatureExtractionPipeline;
-
-      log.info(
-        { model: AdaptiveSemanticChunker.MODEL_NAME },
-        "chunking.semantic_model_loaded",
+    if (!process.env.HUGGINGFACE_API_KEY) {
+      throw new Error(
+        "HUGGINGFACE_API_KEY environment variable is required for AdaptiveSemanticChunker. " +
+          "Create a token at https://huggingface.co/settings/tokens",
       );
     }
   }
@@ -207,23 +186,82 @@ export class AdaptiveSemanticChunker {
     return sentences;
   }
 
-  private async embedTexts(texts: string[]): Promise<number[][]> {
-    if (!this.extractor) throw new Error("Extractor belum diinisialisasi.");
-    const prefixedTexts = texts.map((t) => `passage: ${t}`);
-    const output = await this.extractor(prefixedTexts, {
-      pooling: "mean",
-      normalize: true,
-    });
+  // Calls the HuggingFace Inference API and returns embeddings for a batch of texts.
+  // Retries on 503 (model loading) with the API-supplied wait time.
+  private async fetchEmbeddings(texts: string[]): Promise<number[][]> {
+    const apiKey = process.env.HUGGINGFACE_API_KEY!;
 
-    const embeddings: number[][] = [];
-    const dim = output.dims[1];
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const res = await fetch(HF_MODEL_URL, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ inputs: texts }),
+      });
 
-    for (let i = 0; i < texts.length; i++) {
-      const vec: number[] = [];
-      for (let j = 0; j < dim; j++) vec.push(output.data[i * dim + j]);
-      embeddings.push(vec);
+      if (res.status === 503) {
+        // Model is warming up on HuggingFace's infrastructure
+        const body: { estimated_time?: number } = await res
+          .json()
+          .catch(() => ({}));
+        const waitMs = Math.min((body.estimated_time ?? 20) * 1000, 30_000);
+        log.warn({ waitMs, attempt }, "chunking.hf_api_model_loading");
+        await new Promise((r) => setTimeout(r, waitMs));
+        continue;
+      }
+
+      if (!res.ok) {
+        throw new Error(
+          `HuggingFace Inference API error ${res.status}: ${await res.text()}`,
+        );
+      }
+
+      return this.parseEmbeddingResponse(await res.json());
     }
-    return embeddings;
+
+    throw new Error(
+      "HuggingFace Inference API: model failed to load after retries",
+    );
+  }
+
+  // HuggingFace feature-extraction can return:
+  //   3D [batch × tokens × dims] — token-level, needs mean-pooling
+  //   2D [batch × dims]          — already sentence-level
+  private parseEmbeddingResponse(data: unknown): number[][] {
+    const arr = data as number[][][] | number[][];
+    if (!Array.isArray(arr) || arr.length === 0) {
+      throw new Error("Unexpected response shape from HuggingFace Inference API");
+    }
+
+    if (Array.isArray(arr[0][0])) {
+      // 3D: mean-pool token embeddings → sentence embedding
+      return (arr as number[][][]).map((tokenEmbs) => {
+        const dim = tokenEmbs[0].length;
+        const mean = new Array<number>(dim).fill(0);
+        for (const tok of tokenEmbs) {
+          for (let i = 0; i < dim; i++) mean[i] += tok[i];
+        }
+        for (let i = 0; i < dim; i++) mean[i] /= tokenEmbs.length;
+        return mean;
+      });
+    }
+
+    return arr as unknown as number[][];
+  }
+
+  private async embedTexts(texts: string[]): Promise<number[][]> {
+    const prefixed = texts.map((t) => `passage: ${t}`);
+    const results: number[][] = [];
+
+    for (let i = 0; i < prefixed.length; i += EMBED_BATCH_SIZE) {
+      const batch = prefixed.slice(i, i + EMBED_BATCH_SIZE);
+      const embeddings = await this.fetchEmbeddings(batch);
+      results.push(...embeddings);
+    }
+
+    return results;
   }
 
   public async chunkText(text: string): Promise<any[]> {
@@ -354,7 +392,8 @@ export class AdaptiveSemanticChunker {
 
     for (let i = 0; i < chunks.length; i++) {
       if (i > 0)
-        chunks[i].metadata.previous_chunk_id = chunks[i - 1].metadata.chunk_id;
+        chunks[i].metadata.previous_chunk_id =
+          chunks[i - 1].metadata.chunk_id;
       if (i < chunks.length - 1)
         chunks[i].metadata.next_chunk_id = chunks[i + 1].metadata.chunk_id;
     }
