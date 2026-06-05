@@ -127,6 +127,8 @@ export async function upsertChunksPipeline(
       throw new Error(
         "Gagal memproses batch indeks" + start + "setelah maksimum percobaan",
       );
+
+      throw new Error("Gagal memproses batch indeks" + start + "setelah maksimum percobaan");
     }
   }
 }

@@ -471,6 +471,10 @@ export default function ChatbotWidget({ onClose }: ChatbotWidgetProps) {
     saveRiwayat(riwayatList);
   }, [riwayatList]);
 
+  useEffect(() => {
+  saveRiwayat(riwayatList)
+  }, [riwayatList])
+
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setInput(e.target.value);
     const el = textareaRef.current;
