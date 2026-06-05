@@ -1086,13 +1086,7 @@ useEffect(() => { fetchAll() }, [fetchAll])
                 value={loading ? "—" : `${avgRate.toLocaleString("id-ID", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`}
                 badge={completionRateChange === null ? undefined : `${completionRateChange > 0 ? "+" : ""}${completionRateChange.toLocaleString("id-ID", { maximumFractionDigits: 1 })}%`}
                 badgeType={completionRateChange === null ? "neutral" : completionRateChange >= 0 ? "positive" : "negative"}
-              >
-                {loading ? (
-                  <div className="skeleton" style={{ height: 8, width: "100%", marginBottom: 4 }} />
-                ) : (
-                  <MiniBar data={[55, 68, 48, 88]} />
-                )}
-              </StatCard>
+              />
 
               {/* Tingkat kepuasan */}
               <StatCard
@@ -1118,8 +1112,6 @@ useEffect(() => { fetchAll() }, [fetchAll])
               <StatCard
                 label="Cakupan Pertanyaan"
                 value={loading ? "—" : `${Number(coveragePct).toLocaleString("id-ID")}%`}
-                badge="-0,4%"
-                badgeType="negative"
                 sub1={loading ? undefined : `Selesai: ${fmtNum(resolvedTotal)}`}
                 sub2={loading ? undefined : `PendingMerah:${unhandled}`}
               />
