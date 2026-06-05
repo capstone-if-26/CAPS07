@@ -37,7 +37,7 @@ export default function SidebarExpanded({
     return () => document.removeEventListener("mousedown", fn)
   }, [open, onClose])
 
-  // Close on Escape
+  // Close on escape
   useEffect(() => {
     const fn = (e: KeyboardEvent) => { if (e.key === "Escape") onClose() }
     document.addEventListener("keydown", fn)

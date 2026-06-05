@@ -138,8 +138,7 @@ function Toast({
   );
 }
 
-// Popup Aksi (muncul saat ••• diklik)
-
+// Popup aksi
 function AksiPopup({
   top,
   right,
@@ -296,8 +295,7 @@ function AksiPopup({
   );
 }
 
-// Modal Detail — GET /api/documents/[id]
-
+// Modal detail
 function DetailModal({
   doc: initialDoc,
   onClose,
@@ -509,8 +507,7 @@ function DetailModal({
   );
 }
 
-// Modal Update Status — PATCH /api/documents/[id]
-
+// Modal update status
 function UpdateStatusModal({
   doc,
   onClose,
@@ -747,8 +744,7 @@ function UpdateStatusModal({
   );
 }
 
-// Modal Hapus — DELETE /api/documents/[id]
-
+// Modal hapus
 function HapusModal({
   doc,
   onClose,
@@ -921,7 +917,7 @@ function HapusModal({
   );
 }
 
-// Tambah Dokumen — POST /api/documents
+// Tambah dokumen
 function TambahDokumenModal({
   onClose,
   onAdded,
@@ -1388,7 +1384,6 @@ function TambahDokumenModal({
 }
 
 // Main Page
-
 export default function DokumenPage() {
   const [docs, setDocs] = useState<Dokumen[]>([]);
   const [meta, setMeta] = useState<Meta>({

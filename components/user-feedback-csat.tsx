@@ -24,9 +24,13 @@ type TrendItem = {
 
 type FeedbackApiData = {
   csat: number
+  csatChange: number | null
   totalFeedback: number
+  totalFeedbackChange: number | null
   likes: number
   dislikes: number
+  likeRate: number
+  dislikeRate: number
   csatByIntent: CsatByIntent[]
   trend: TrendItem[]
 }
@@ -59,12 +63,14 @@ export default function UserFeedbackCSATPage() {
 
   useEffect(() => { fetchFeedback() }, [fetchFeedback])
 
-  const totalFeedback = feedbackData?.totalFeedback ?? 0
-  const totalLikes    = feedbackData?.likes ?? 0
-  const totalDislikes = feedbackData?.dislikes ?? 0
-  const csatPct       = feedbackData?.csat ?? 0
-  const likesPct      = totalFeedback > 0 ? Math.round(totalLikes / totalFeedback * 100) : 0
-  const dislikesPct   = totalFeedback > 0 ? Math.round(totalDislikes / totalFeedback * 100) : 0
+  const totalFeedback       = feedbackData?.totalFeedback ?? 0
+  const totalLikes          = feedbackData?.likes ?? 0
+  const totalDislikes       = feedbackData?.dislikes ?? 0
+  const csatPct             = feedbackData?.csat ?? 0
+  const csatChange          = feedbackData?.csatChange ?? null
+  const totalFeedbackChange = feedbackData?.totalFeedbackChange ?? null
+  const likesPct            = feedbackData?.likeRate ?? 0
+  const dislikesPct         = feedbackData?.dislikeRate ?? 0
 
   const csatPerIntent = (feedbackData?.csatByIntent ?? []).map(item => ({
     name: item.intent,
@@ -184,13 +190,16 @@ export default function UserFeedbackCSATPage() {
               <div className="uf-stat-value">{Number(csatPct).toLocaleString("id-ID", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%</div>
               <div className="uf-stat-sub">
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
-                6,1% vs sebelumnya
+                {csatChange !== null
+                  ? `${csatChange > 0 ? "+" : ""}${csatChange.toLocaleString("id-ID", { maximumFractionDigits: 1 })}% vs sebelumnya`
+                  : "Belum ada data sebelumnya"
+                }
               </div>
             </>
           )}
         </div>
 
-        {/* Total Feedback */}
+        {/* Total feedback */}
         <div className="uf-stat-card">
           <div className="uf-stat-label">Total Feedback</div>
           {loading ? <Skeleton h={40} /> : (
@@ -198,7 +207,10 @@ export default function UserFeedbackCSATPage() {
               <div className="uf-stat-value">{totalFeedback.toLocaleString("id-ID")}</div>
               <div className="uf-stat-sub">
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
-                15,4% vs sebelumnya
+                {totalFeedbackChange !== null
+                  ? `${totalFeedbackChange > 0 ? "+" : ""}${totalFeedbackChange.toLocaleString("id-ID", { maximumFractionDigits: 1 })}% vs sebelumnya`
+                  : "Belum ada data sebelumnya"
+                }
               </div>
             </>
           )}
@@ -226,7 +238,7 @@ export default function UserFeedbackCSATPage() {
           )}
         </div>
 
-        {/* Tidak Puas */}
+        {/* Tidak puas */}
         <div className="uf-stat-card">
           <div className="uf-stat-label">
             <img
@@ -251,7 +263,7 @@ export default function UserFeedbackCSATPage() {
 
       {/* Charts row */}
       <div className="uf-charts-row">
-        {/* CSAT per Intent */}
+        {/* CSAT per intent */}
         <div className="uf-card">
           <div className="uf-card-title">CSAT per Intent</div>
           {loading ? <Skeleton h={320} /> : csatPerIntent.length > 0 ? (
@@ -313,7 +325,7 @@ export default function UserFeedbackCSATPage() {
           )}
         </div>
 
-        {/* CSAT Trend */}
+        {/* CSAT trend */}
         <div className="uf-card">
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
             <div className="uf-card-title" style={{ marginBottom: 0 }}>CSAT Trend (Like vs Dislike)</div>

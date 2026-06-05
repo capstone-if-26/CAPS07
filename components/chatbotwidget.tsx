@@ -398,7 +398,6 @@ export default function ChatbotWidget({ onClose }: ChatbotWidgetProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const dotMenuRef = useRef<HTMLDivElement>(null);
 
-  // Selalu mulai chat baru saat pertama load
   useEffect(() => {
     const savedId = getSavedChatId();
     if (savedId) {
@@ -472,8 +471,14 @@ export default function ChatbotWidget({ onClose }: ChatbotWidgetProps) {
     saveRiwayat(riwayatList);
   }, [riwayatList]);
 
+  useEffect(() => {
+  saveRiwayat(riwayatList)
+  }, [riwayatList])
+
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setInput(e.target.value);
+    const val = e.target.value
+    if (val.length > 1000) return
+    setInput(val);
     const el = textareaRef.current;
     if (el) {
       el.style.height = "auto";
