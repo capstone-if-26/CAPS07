@@ -66,14 +66,14 @@ export class AdaptiveSemanticChunker {
 
   public async initialize(): Promise<void> {
     if (!this.extractor) {
-      // Dynamic import so the heavy package is only loaded when the chunker is used,
-      // and so we can configure the execution backend before the first pipeline call.
+      // Dynamic import so the heavy package is only loaded when the chunker is used.
+      // On Vercel the build system aliases this to transformers.web.js (WASM-only).
+      // On regular servers it loads the native Node.js build (onnxruntime-node).
       const { pipeline, env } = await import("@huggingface/transformers");
 
       if (process.env.VERCEL) {
-        // Vercel serverless Lambda does not ship native ONNX runtime binaries.
-        // Redirect the model cache to /tmp (the only writable directory).
-        // The pipeline call below then forces the WASM execution provider.
+        // /tmp is the only writable directory on Vercel Lambda. Without this,
+        // model downloads would fail because the default ~/.cache path is read-only.
         env.cacheDir = "/tmp/hf-cache";
       }
 
@@ -85,12 +85,6 @@ export class AdaptiveSemanticChunker {
       this.extractor = (await pipeline(
         "feature-extraction",
         AdaptiveSemanticChunker.MODEL_NAME,
-        {
-          // "wasm" on Vercel: uses onnxruntime-web (no native binaries required).
-          // "auto" elsewhere: prefers onnxruntime-node (native, faster) if installed,
-          //   falls back to WASM otherwise.
-          device: (process.env.VERCEL ? "wasm" : "auto") as "wasm" | "auto",
-        },
       )) as FeatureExtractionPipeline;
 
       log.info(
