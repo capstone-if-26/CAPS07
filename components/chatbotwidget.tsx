@@ -476,7 +476,9 @@ export default function ChatbotWidget({ onClose }: ChatbotWidgetProps) {
   }, [riwayatList])
 
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setInput(e.target.value);
+    const val = e.target.value
+    if (val.length > 1000) return
+    setInput(val);
     const el = textareaRef.current;
     if (el) {
       el.style.height = "auto";
