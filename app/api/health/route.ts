@@ -1,5 +1,5 @@
 import { neon } from "@neondatabase/serverless";
-import { getModuleLogger } from "@/lib/logger";
+import { getModuleLogger } from "@/lib/utils/logger";
 
 const log = getModuleLogger("api/health");
 

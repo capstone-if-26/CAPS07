@@ -2,8 +2,9 @@ import { generateText } from "ai";
 import { routingModel } from "@/lib/openrouter";
 import { getRoutingPrompt } from "./prompts";
 import { Chats } from "@/modules/chats/type";
-import { getModuleLogger } from "../logger";
+import { getModuleLogger } from "../utils/logger";
 import { DocumentInfo, RoutingResult } from "./type";
+import { DEFAULT_MAX_TRIES } from "./constants";
 
 const log = getModuleLogger("lib/ai/routing");
 
@@ -37,7 +38,7 @@ export async function routeIntentAndNamespaces(
   );
 
   let attempt = 0;
-  const maxRetries = 2;
+  const maxRetries = DEFAULT_MAX_TRIES;
 
   while (attempt <= maxRetries) {
     try {

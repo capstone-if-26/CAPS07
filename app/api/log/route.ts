@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { getModuleLogger } from "@/lib/logger";
+import { getModuleLogger } from "@/lib/utils/logger";
 import { buildFailedResponse, buildSuccessResponse } from "@/lib/utils/response";
 
 const log = getModuleLogger("api/log");

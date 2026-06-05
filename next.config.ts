@@ -2,7 +2,7 @@
 const nextConfig = {
   serverExternalPackages: [
     "onnxruntime-node",
-    "@xenova/transformers",
+    "@huggingface/transformers",
     "mammoth",
     "pdf-parse",
     "pino",

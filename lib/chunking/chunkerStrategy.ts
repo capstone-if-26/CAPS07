@@ -4,7 +4,7 @@ import { ChunkerConfig, ChunkData } from "@/types/chunker";
 import { LegalRegexChunker } from "./legalRegexChunker";
 import { FAQRegexChunker } from "./faqRegexChunker";
 import { AdaptiveSemanticChunker } from "./adaptiveSemanticChunker";
-import { getModuleLogger } from "@/lib/logger";
+import { getModuleLogger } from "@/lib/utils/logger";
 
 const log = getModuleLogger("lib/chunking/chunkerStrategy");
 

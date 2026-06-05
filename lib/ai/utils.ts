@@ -2,7 +2,7 @@ import {
   ScoredPineconeRecord,
   RecordMetadata,
 } from "@pinecone-database/pinecone";
-import { formatSourceListingLine } from "@/lib/format-source-title";
+import { formatSourceListingLine } from "@/lib/utils/format-source-title";
 import { Chats } from "@/modules/chats/type";
 import type {
   AgenticQuestion,

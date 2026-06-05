@@ -1,5 +1,5 @@
 import * as crypto from "crypto";
-import { pipeline, FeatureExtractionPipeline } from "@xenova/transformers";
+import type { FeatureExtractionPipeline } from "@huggingface/transformers";
 import {
   ChunkerConfig,
   ChunkMetadata,
@@ -7,7 +7,7 @@ import {
   DocType,
 } from "../../types/chunker";
 import path from "path";
-import { getModuleLogger } from "@/lib/logger";
+import { getModuleLogger } from "@/lib/utils/logger";
 
 const log = getModuleLogger("lib/chunking/adaptiveSemanticChunker");
 
@@ -24,7 +24,8 @@ export class AdaptiveSemanticChunker {
   private readonly status: string;
   private fileHash: string = "";
 
-  private static readonly MODEL_NAME = "Xenova/multilingual-e5-base";
+  private static readonly MODEL_NAME =
+    process.env.EMBEDDING_MODEL || "Xenova/multilingual-e5-small";
   private static readonly STD_MULTIPLIER = 0.5;
   private static readonly OVERLAP_SENTENCES = 1;
   private static readonly MIN_CHUNK_SIZE = 150;
@@ -65,12 +66,37 @@ export class AdaptiveSemanticChunker {
 
   public async initialize(): Promise<void> {
     if (!this.extractor) {
-      log.debug({ model: AdaptiveSemanticChunker.MODEL_NAME }, "chunking.semantic_model_loading");
-      this.extractor = await pipeline(
+      // Dynamic import so the heavy package is only loaded when the chunker is used,
+      // and so we can configure the execution backend before the first pipeline call.
+      const { pipeline, env } = await import("@huggingface/transformers");
+
+      if (process.env.VERCEL) {
+        // Vercel serverless Lambda does not ship native ONNX runtime binaries.
+        // Redirect the model cache to /tmp (the only writable directory).
+        // The pipeline call below then forces the WASM execution provider.
+        env.cacheDir = "/tmp/hf-cache";
+      }
+
+      log.debug(
+        { model: AdaptiveSemanticChunker.MODEL_NAME },
+        "chunking.semantic_model_loading",
+      );
+
+      this.extractor = (await pipeline(
         "feature-extraction",
         AdaptiveSemanticChunker.MODEL_NAME,
+        {
+          // "wasm" on Vercel: uses onnxruntime-web (no native binaries required).
+          // "auto" elsewhere: prefers onnxruntime-node (native, faster) if installed,
+          //   falls back to WASM otherwise.
+          device: (process.env.VERCEL ? "wasm" : "auto") as "wasm" | "auto",
+        },
+      )) as FeatureExtractionPipeline;
+
+      log.info(
+        { model: AdaptiveSemanticChunker.MODEL_NAME },
+        "chunking.semantic_model_loaded",
       );
-      log.info({ model: AdaptiveSemanticChunker.MODEL_NAME }, "chunking.semantic_model_loaded");
     }
   }
 
@@ -145,8 +171,17 @@ export class AdaptiveSemanticChunker {
 
   private splitSentences(text: string): string[] {
     const rawSegments = text.split(/(?<=[.!?])\s+/);
-    
-    const acronyms = new Set(["PT.", "CV.", "Rp.", "No.", "Tbk.", "Hlm.", "Pasal.", "Bab."]);
+
+    const acronyms = new Set([
+      "PT.",
+      "CV.",
+      "Rp.",
+      "No.",
+      "Tbk.",
+      "Hlm.",
+      "Pasal.",
+      "Bab.",
+    ]);
     const sentences: string[] = [];
     let buffer = "";
 
@@ -202,7 +237,10 @@ export class AdaptiveSemanticChunker {
 
     const cleanedText = this.cleanText(text);
     const sentences = this.splitSentences(cleanedText);
-    log.debug({ documentName: this.documentName, sentenceCount: sentences.length }, "chunking.semantic_chunk_started");
+    log.debug(
+      { documentName: this.documentName, sentenceCount: sentences.length },
+      "chunking.semantic_chunk_started",
+    );
 
     if (sentences.length <= 1) return [];
 
@@ -327,7 +365,14 @@ export class AdaptiveSemanticChunker {
         chunks[i].metadata.next_chunk_id = chunks[i + 1].metadata.chunk_id;
     }
 
-    log.info({ documentName: this.documentName, chunkCount: chunks.length, sentenceCount: sentences.length }, "chunking.semantic_chunk_completed");
+    log.info(
+      {
+        documentName: this.documentName,
+        chunkCount: chunks.length,
+        sentenceCount: sentences.length,
+      },
+      "chunking.semantic_chunk_completed",
+    );
     return chunks;
   }
 }

@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { buildFailedResponse, buildSuccessResponse } from "@/lib/utils/response";
 import { upsertMessageFeedback, getMessageById } from "@/modules/messages/repository";
-import { getModuleLogger } from "@/lib/logger";
+import { getModuleLogger } from "@/lib/utils/logger";
 
 const log = getModuleLogger("api/messages/[id]/feedback");
 

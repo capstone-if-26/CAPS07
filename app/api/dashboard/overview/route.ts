@@ -5,7 +5,7 @@ import {
 } from "@/lib/utils/response";
 import { getDashboardOverview } from "@/modules/dashboard/service";
 import { DashboardOverviewParams } from "@/modules/dashboard/type";
-import { getModuleLogger } from "@/lib/logger";
+import { getModuleLogger } from "@/lib/utils/logger";
 
 const log = getModuleLogger("api/dashboard/overview");
 

@@ -20,8 +20,8 @@ import { getApplicableDocuments } from "@/modules/documents/repository";
 import {
   classifyIntentAndRelevance,
   generateIntentBasedSummary,
-  OjkIntent,
 } from "@/lib/ai/intent";
+import { DEFAULT_MODEL_NAME } from "./constant";
 
 import type { Chats, ClientMessageSnapshot } from "./type";
 import {
@@ -34,15 +34,13 @@ import {
   buildDefaultNamespaces,
   formatConversation,
 } from "./utils";
-import { getModuleLogger } from "@/lib/logger";
+import { getModuleLogger } from "@/lib/utils/logger";
+import { OjkIntent } from "@/lib/ai/type";
 
 export { normalizeClientMessageSnapshot } from "./utils";
 export type { ClientMessageSnapshot } from "./type";
 
 const log = getModuleLogger("modules/chats/service");
-
-const DEFAULT_MODEL_NAME =
-  process.env.LLM_MODEL || "nvidia/nemotron-3-nano-30b-a3b:free";
 
 async function buildAgenticStreamSession({
   chatId,
@@ -94,7 +92,10 @@ async function buildAgenticStreamSession({
         classifyIntentAndRelevance(question, shortTermMemory)
           .then(async (classification) => {
             await updateChatIntent(chatId, classification.intent);
-            log.debug({ chatId, intent: classification.intent }, "chat.intent_classified");
+            log.debug(
+              { chatId, intent: classification.intent },
+              "chat.intent_classified",
+            );
           })
           .catch((err) => {
             log.error({ err, chatId }, "chat.intent_classify_failed");

@@ -16,14 +16,15 @@ import { ChunkerConfig } from "@/types/chunker";
 import * as crypto from "crypto";
 import { UploadDocumentInput, UploadDocumentResult } from "./types";
 import { DocumentUploadError, DocumentOperationError } from "./error";
-import { getModuleLogger } from "@/lib/logger";
+import { getModuleLogger } from "@/lib/utils/logger";
+import { DEFAULT_PAGE_LIMIT, DEFAULT_PAGE_SIZE } from "./constant";
 
 const log = getModuleLogger("modules/documents/service");
 
 export async function fetchAllAvailableDocuments(
   search: string = "",
-  page: number = 1,
-  limit: number = 10,
+  page: number = DEFAULT_PAGE_SIZE,
+  limit: number = DEFAULT_PAGE_LIMIT,
 ) {
   try {
     const offset = (page - 1) * limit;
@@ -77,7 +78,10 @@ export async function deleteDocument(id: string) {
   try {
     await deletePineconeNamespace(doc.namespace);
   } catch (error) {
-    log.error({ err: error, documentId: id }, "document.pinecone_delete_failed");
+    log.error(
+      { err: error, documentId: id },
+      "document.pinecone_delete_failed",
+    );
     log.warn({ documentId: id }, "document.rollback_attempted");
     try {
       await createDocumentRecord({
@@ -92,7 +96,10 @@ export async function deleteDocument(id: string) {
       });
       log.info({ documentId: id }, "document.rollback_succeeded");
     } catch (rollbackError) {
-      log.error({ err: rollbackError, documentId: id }, "document.rollback_failed");
+      log.error(
+        { err: rollbackError, documentId: id },
+        "document.rollback_failed",
+      );
     }
 
     const message =
@@ -193,7 +200,10 @@ export async function processDocumentInBackground(
     processingStatus,
   } = input;
 
-  log.info({ documentId, documentType, fileName }, "document.background_processing_started");
+  log.info(
+    { documentId, documentType, fileName },
+    "document.background_processing_started",
+  );
 
   try {
     const chunkerConfig: ChunkerConfig = {
@@ -208,7 +218,11 @@ export async function processDocumentInBackground(
       processingStatus,
     };
 
-    const chunks = await executeChunkerPipeline(documentType, file, chunkerConfig);
+    const chunks = await executeChunkerPipeline(
+      documentType,
+      file,
+      chunkerConfig,
+    );
 
     if (chunks.length === 0) {
       log.warn({ documentId }, "document.background_empty_chunks");
@@ -224,7 +238,10 @@ export async function processDocumentInBackground(
     await updateDocumentTotalChunks(documentId, chunks.length);
     await updateDocumentProcessingStatus(documentId, "completed");
 
-    log.info({ documentId, chunkCount: chunks.length }, "document.background_completed");
+    log.info(
+      { documentId, chunkCount: chunks.length },
+      "document.background_completed",
+    );
   } catch (error) {
     const errorMessage =
       error instanceof Error ? error.message : "Unknown processing error";
@@ -234,14 +251,20 @@ export async function processDocumentInBackground(
     try {
       await updateDocumentProcessingStatus(documentId, "failed", errorMessage);
     } catch (updateError) {
-      log.error({ err: updateError, documentId }, "document.background_status_update_failed");
+      log.error(
+        { err: updateError, documentId },
+        "document.background_status_update_failed",
+      );
     }
 
     try {
       await deleteDocumentRecord(documentId);
       log.info({ documentId }, "document.background_rollback_succeeded");
     } catch (rollbackError) {
-      log.error({ err: rollbackError, documentId }, "document.background_rollback_failed");
+      log.error(
+        { err: rollbackError, documentId },
+        "document.background_rollback_failed",
+      );
     }
   }
 }

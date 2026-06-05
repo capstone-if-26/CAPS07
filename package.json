@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@ai-sdk/openai": "^3.0.41",
+    "@huggingface/transformers": "^4.2.0",
     "@neondatabase/serverless": "^1.0.2",
     "@pinecone-database/pinecone": "^7.1.0",
     "@radix-ui/react-use-controllable-state": "^1.2.2",
@@ -19,7 +20,6 @@
     "@streamdown/code": "^1.1.1",
     "@streamdown/math": "^1.0.2",
     "@streamdown/mermaid": "^1.0.2",
-    "@xenova/transformers": "^2.17.2",
     "@xyflow/react": "^12.10.2",
     "ai": "^6.0.168",
     "ansi-to-react": "^6.2.6",

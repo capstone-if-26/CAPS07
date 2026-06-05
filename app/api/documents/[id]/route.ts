@@ -2,7 +2,7 @@ import { NextRequest } from "next/server";
 import { buildFailedResponse, buildSuccessResponse } from "@/lib/utils/response";
 import { getDocumentById, deleteDocument, updateDocumentStatus } from "@/modules/documents/service";
 import { DocumentOperationError } from "@/modules/documents/error";
-import { getModuleLogger } from "@/lib/logger";
+import { getModuleLogger } from "@/lib/utils/logger";
 
 const log = getModuleLogger("api/documents/[id]");
 

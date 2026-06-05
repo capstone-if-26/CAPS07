@@ -3,7 +3,7 @@ import { continueChatStream } from "@/modules/chats/service";
 import { NextRequest, after } from "next/server";
 import { buildSuccessResponse, buildFailedResponse } from "@/lib/utils/response";
 import { toAgenticEventStreamResponse } from "@/lib/ai/rag";
-import { getModuleLogger } from "@/lib/logger";
+import { getModuleLogger } from "@/lib/utils/logger";
 import { insertApiRequestLog } from "@/modules/dashboard/repository";
 
 const log = getModuleLogger("api/chats/[id]/messages");

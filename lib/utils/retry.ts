@@ -2,7 +2,7 @@
  * Fungsi utilitas untuk mengeksekusi Promise dengan mekanisme Exponential Backoff.
  * Replikasi dari pustaka `tenacity`.
  */
-import { getModuleLogger } from "../logger";
+import { getModuleLogger } from "./logger";
 
 const log = getModuleLogger("lib/utils/retry");
 

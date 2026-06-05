@@ -1,9 +1,9 @@
 import { generateText, stepCountIs, streamText, tool } from "ai";
 import { model } from "@/lib/openrouter";
 import { retrieveRelevantChunks } from "@/lib/pinecone/utils";
-import { stripSummaryMarkdownArtifacts } from "@/lib/format-plain-summary";
+import { stripSummaryMarkdownArtifacts } from "@/lib/utils/format-plain-summary";
 import { z } from "zod";
-import { getModuleLogger } from "@/lib/logger";
+import { getModuleLogger } from "@/lib/utils/logger";
 
 const log = getModuleLogger("lib/ai/rag");
 
@@ -35,6 +35,15 @@ import {
 } from "./prompts";
 import {
   ASK_USER_QUESTION_TOOL_DESCRIPTION,
+  CHAT_FREQUENCY_PENALTY,
+  CHAT_PRESENCE_PENALTY,
+  CHAT_TEMPERATURE,
+  CHAT_TOP_P,
+  DEFAULT_FREQUENCY_PENALTY,
+  DEFAULT_PRESENCE_PENALTY,
+  DEFAULT_TEMPERATURE,
+  DEFAULT_TOP_K,
+  DEFAULT_TOP_P,
   RETRIEVE_POLICY_CONTEXT_DESCRIPTION,
 } from "./constants";
 
@@ -60,7 +69,7 @@ export function createAgenticRagStream(params: AgenticRagStreamParams) {
     process.env.PINECONE_NAMESPACE || "",
   ]);
   const namespaceSet = new Set(availableNamespaces);
-  const topK = params.topK ?? 6;
+  const topK = params.topK ?? DEFAULT_TOP_K;
   const shortTermMemoryStr = buildShortTermMemoryString(params.shortTermMemory);
   const docsCatalog = buildDocsCatalog(params.availableDocuments);
   const retrievedMatches: RetrievedMatch[] = [];
@@ -81,10 +90,10 @@ export function createAgenticRagStream(params: AgenticRagStreamParams) {
     model,
     system: systemPrompt,
     prompt: userPrompt,
-    temperature: 0.5,
-    topP: 0.9,
-    frequencyPenalty: 0.3,
-    presencePenalty: 0.2,
+    temperature: CHAT_TEMPERATURE,
+    topP: CHAT_TOP_P,
+    frequencyPenalty: CHAT_FREQUENCY_PENALTY,
+    presencePenalty: CHAT_PRESENCE_PENALTY,
     stopWhen: forceQuestionTool ? stepCountIs(1) : stepCountIs(4),
     toolChoice: forceQuestionTool
       ? { type: "tool", toolName: "ask_user_question" }
@@ -357,8 +366,8 @@ export async function generateConversationSummary(
       model,
       system: systemPrompt,
       prompt: userPrompt,
-      temperature: 0.1,
-      topP: 0.9,
+      temperature: DEFAULT_TEMPERATURE,
+      topP: DEFAULT_TOP_P,
     });
 
     const summary = stripSummaryMarkdownArtifacts(text.trim());
@@ -377,10 +386,10 @@ export async function generateQuiz(chats: string) {
       model,
       system: systemPrompt,
       prompt: userPrompt,
-      temperature: 0.1,
-      topP: 0.8,
-      presencePenalty: 0,
-      frequencyPenalty: 0,
+      temperature: DEFAULT_TEMPERATURE,
+      topP: DEFAULT_TOP_P,
+      presencePenalty: DEFAULT_PRESENCE_PENALTY,
+      frequencyPenalty: DEFAULT_FREQUENCY_PENALTY,
     });
 
     const sanitizedText = text

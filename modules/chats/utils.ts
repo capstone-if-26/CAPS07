@@ -1,15 +1,14 @@
 import { AgenticKnowledgeDocument } from "@/lib/ai/rag";
-import { OjkIntent } from "@/lib/ai/intent";
 import { updateChatMetadata } from "@/modules/chats/repository";
 import { getMessagesByChatId } from "@/modules/messages/repository";
 import { getApplicableDocuments } from "@/modules/documents/repository";
 import type { Chats, ChatMetadataShape, ClientMessageSnapshot } from "./type";
-
-const DEFAULT_NAMESPACE =
-  process.env.PINECONE_NAMESPACE || "pojk-22-2023-perlindungan-konsumen";
-
-const SUMMARY_SNAPSHOT_MAX_MESSAGES = 80;
-const SUMMARY_SNAPSHOT_MAX_CONTENT = 32000;
+import { OjkIntent } from "@/lib/ai/type";
+import {
+  DEFAULT_NAMESPACE,
+  SUMMARY_SNAPSHOT_MAX_MESSAGES,
+  SUMMARY_SNAPSHOT_MAX_CONTENT,
+} from "./constant";
 
 // ─── Metadata helpers ───────────────────────────────────────────────
 

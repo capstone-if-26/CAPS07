@@ -1,7 +1,7 @@
 import { NextRequest, after } from "next/server";
 import { buildFailedResponse, buildSuccessResponse } from "@/lib/utils/response";
 import { generateChatIntentSummary, normalizeClientMessageSnapshot } from "@/modules/chats/service";
-import { getModuleLogger } from "@/lib/logger";
+import { getModuleLogger } from "@/lib/utils/logger";
 import { insertApiRequestLog } from "@/modules/dashboard/repository";
 
 const log = getModuleLogger("api/chats/[id]/summary");

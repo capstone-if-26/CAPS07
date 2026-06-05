@@ -7,7 +7,7 @@ import {
 } from "@/modules/documents/service";
 import type { DocType } from "@/types/chunker";
 import { DocumentUploadError } from "@/modules/documents/error";
-import { getModuleLogger } from "@/lib/logger";
+import { getModuleLogger } from "@/lib/utils/logger";
 
 const log = getModuleLogger("api/documents");
 

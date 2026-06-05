@@ -7,22 +7,23 @@ import {
   ScoredPineconeRecord,
 } from "@pinecone-database/pinecone";
 import { pineconeIndex } from ".";
-import { getModuleLogger } from "@/lib/logger";
+import { ChunkData, ChunkMetadata } from "@/types/chunker";
+import { getModuleLogger } from "@/lib/utils/logger";
+import {
+  DEFAULT__GLOBAL_TOP_K_NAMESPACE,
+  DEFAULT_BATCH_SIZE,
+  DEFAULT_THRESHOLD_SCORE_QUERY,
+  DEFAULT_TOP_K_NAMESPACE,
+  MAXIMAL_BATCH_SIZE,
+} from "./type";
 
 const log = getModuleLogger("lib/pinecone/utils");
 
-// Mengimpor tipe dari implementasi chunker sebelumnya
-import { ChunkData, ChunkMetadata } from "@/types/chunker";
-
-/**
- * Filter dan transformasi metadata untuk diindeks oleh Pinecone.
- * Sesuai arsitektur Python, memindahkan page_content ke dalam metadata.text.
- */
 function extractPineconeMetadata(chunk: ChunkData): RecordMetadata {
   const metaSource = chunk.metadata;
   const targetMeta: RecordMetadata = {};
 
-  // Pinecone hanya menerima string, number, boolean, atau array of string dalam metadata
+  // Metadata wajib
   const keysToExtract: (keyof ChunkMetadata)[] = [
     "document_name",
     "chunk_id",
@@ -38,7 +39,6 @@ function extractPineconeMetadata(chunk: ChunkData): RecordMetadata {
     }
   }
 
-  // Payload injeksi krusial untuk fase Retrieval
   targetMeta["text"] = chunk.page_content;
 
   return targetMeta;
@@ -50,12 +50,12 @@ function extractPineconeMetadata(chunk: ChunkData): RecordMetadata {
 export async function upsertChunksPipeline(
   chunks: ChunkData[],
   namespaceId: string,
-  batchSize: number = 24,
+  batchSize: number = DEFAULT_BATCH_SIZE,
 ): Promise<void> {
   if (chunks.length === 0) return;
 
-  // 1. Batasi ukuran batch maksimal 64 untuk mematuhi regulasi Inference API
-  const safeBatchSize = Math.min(batchSize, 64);
+  // 1. Batasi ukuran batch untuk mematuhi regulasi Inference API
+  const safeBatchSize = Math.min(batchSize, MAXIMAL_BATCH_SIZE);
   log.info(
     {
       chunkCount: chunks.length,
@@ -67,7 +67,7 @@ export async function upsertChunksPipeline(
 
   const pineconeNs = getPineconeNamespace(namespaceId);
 
-  // 2. Loop Utama: Siklus komputasi dan unggahan sekarang disatukan per batch
+  // 2. Siklus komputasi dan unggahan sekarang disatukan per batch
   for (let start = 0; start < chunks.length; start += safeBatchSize) {
     const batchChunks = chunks.slice(start, start + safeBatchSize);
 
@@ -90,7 +90,7 @@ export async function upsertChunksPipeline(
         });
       });
 
-      // 4. Perakitan Payload Pinecone
+      // 4.  Payload Pinecone
       const records: PineconeRecord[] = [];
       const vectorsData = embeddingResponse.data;
 
@@ -147,10 +147,10 @@ export async function deletePineconeNamespace(namespace: string) {
 export async function retrieveRelevantChunks(
   question: string,
   namespaces: string[],
-  namespaceTopK: number = 6,
+  namespaceTopK: number = DEFAULT_TOP_K_NAMESPACE,
   metadataFilter?: Record<string, unknown>,
-  globalTopK: number = 30,
-  minScoreThreshold: number = 0.2,
+  globalTopK: number = DEFAULT__GLOBAL_TOP_K_NAMESPACE,
+  minScoreThreshold: number = DEFAULT_THRESHOLD_SCORE_QUERY,
 ): Promise<ScoredPineconeRecord<RecordMetadata>[]> {
   log.debug(
     { namespaceCount: namespaces.length, topK: namespaceTopK },
@@ -233,7 +233,6 @@ export async function retrieveRelevantChunks(
     allMatches = allMatches.concat(matchArray);
   }
 
-  // Deduplikasi
   const uniqueMatches = Array.from(
     new Map(allMatches.map((item) => [item.id, item])).values(),
   );

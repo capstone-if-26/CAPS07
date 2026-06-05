@@ -10,7 +10,7 @@ import {
   ChunkMetadata,
   ChunkData,
 } from "@/types/chunker";
-import { getModuleLogger } from "@/lib/logger";
+import { getModuleLogger } from "@/lib/utils/logger";
 
 const log = getModuleLogger("lib/chunking/faqRegexChunker");
 

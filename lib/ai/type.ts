@@ -1,4 +1,5 @@
 import { Chats } from "@/modules/chats/type";
+import { OJK_INTENTS } from "./constants";
 
 export type AgenticRagStreamEvent =
   | {
@@ -71,3 +72,15 @@ export interface RoutingResult {
   needs_namespace_routing: boolean;
   namespaces?: string[];
 }
+
+// Intent types
+export type OjkIntent = (typeof OJK_INTENTS)[number];
+
+export type IntentClassification = {
+  intent: OjkIntent;
+  isOjkRelevant: boolean;
+  confidence: number;
+  reason: string;
+};
+
+export type IntentRequirementsMap = Record<OjkIntent, string[]>;
