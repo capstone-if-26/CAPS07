@@ -1,46 +1,55 @@
-"use client"
+"use client";
 
-import { useRouter } from "next/navigation"
-import { useState, useEffect, useCallback } from "react"
-import SidebarExpanded from "@/components/sidebar-expanded"
-import IntentSesiChatPage from "@/components/intent-sesi-chat"
-import UserFeedbackCSATPage from "@/components/user-feedback-csat"
-import DokumenPage from "@/components/dokumen-page"
-import PerformaTeknis from "@/components/performa-teknis"
-import WordCloud from "@/components/word-cloud"
-import Image from "next/image"
+import { useRouter } from "next/navigation";
+import { useState, useEffect, useCallback } from "react";
+import SidebarExpanded from "@/components/sidebar-expanded";
+import IntentSesiChatPage from "@/components/intent-sesi-chat";
+import UserFeedbackCSATPage from "@/components/user-feedback-csat";
+import DokumenPage from "@/components/dokumen-page";
+import PerformaTeknis from "@/components/performa-teknis";
+import PengaturanPage from "@/components/pengaturan-page";
+import WordCloud from "@/components/word-cloud";
+import Image from "next/image";
 import {
-  LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
-  PieChart, Pie, Cell,
-} from "recharts"
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ResponsiveContainer,
+  CartesianGrid,
+  PieChart,
+  Pie,
+  Cell,
+} from "recharts";
 
 // Types
 type OverviewIntent = {
-  intent: string
-  count: number
-  percentage: number
-}
+  intent: string;
+  count: number;
+  percentage: number;
+};
 
 type OverviewTrend = {
-  period: string
-  totalChats: number
-  completionRate: number
-  likePercentage: number
-}
+  period: string;
+  totalChats: number;
+  completionRate: number;
+  likePercentage: number;
+};
 
 type OverviewData = {
-  totalChats: number
-  resolvedChats: number
-  totalChatsChange: number | null
-  completionRate: number
-  completionRateChange: number | null
-  likePercentage: number
-  satisfactionLevel: string
-  satisfactionLabel: string
-  satisfactionThreshold: number
-  intents: OverviewIntent[]
-  trend: OverviewTrend[]
-}
+  totalChats: number;
+  resolvedChats: number;
+  totalChatsChange: number | null;
+  completionRate: number;
+  completionRateChange: number | null;
+  likePercentage: number;
+  satisfactionLevel: string;
+  satisfactionLabel: string;
+  satisfactionThreshold: number;
+  intents: OverviewIntent[];
+  trend: OverviewTrend[];
+};
 
 // Constants
 const SIDEBAR_ICONS = [
@@ -49,26 +58,94 @@ const SIDEBAR_ICONS = [
   { icon: "heart", label: "User Feedback dan CSAT", enabled: true },
   { icon: "doc", label: "Dokumen", enabled: true },
   { icon: "pie", label: "Performa dan Teknis", enabled: true },
-]
+];
 
-const INTENT_COLORS = ["#3B82F6", "#22C55E", "#F97316", "#D1D5DB"]
+const INTENT_COLORS = ["#3B82F6", "#22C55E", "#F97316", "#D1D5DB"];
 
 // Helpers
 function fmtNum(n: number) {
-  if (n >= 1000) return (n / 1000).toLocaleString("id-ID", { maximumFractionDigits: 1 }) + "k"
-  return n.toLocaleString("id-ID")
+  if (n >= 1000)
+    return (
+      (n / 1000).toLocaleString("id-ID", { maximumFractionDigits: 1 }) + "k"
+    );
+  return n.toLocaleString("id-ID");
 }
 
 // Sub-components
-function SidebarIcon({ icon, active, onClick, disabled, label }: { icon: string; active?: boolean; onClick?: () => void; disabled?: boolean; label?: string }) {
-  const [showTooltip, setShowTooltip] = useState(false)
+function SidebarIcon({
+  icon,
+  active,
+  onClick,
+  disabled,
+  label,
+}: {
+  icon: string;
+  active?: boolean;
+  onClick?: () => void;
+  disabled?: boolean;
+  label?: string;
+}) {
+  const [showTooltip, setShowTooltip] = useState(false);
   const icons: Record<string, React.ReactElement> = {
-    grid: <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>,
-    chat: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>,
-    heart: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>,
-    pie: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21.21 15.89A10 10 0 1 1 8 2.83"/><path d="M22 12A10 10 0 0 0 12 2v10z"/></svg>,
-    doc: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>,
-  }
+    grid: (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+        <rect x="3" y="3" width="7" height="7" rx="1" />
+        <rect x="14" y="3" width="7" height="7" rx="1" />
+        <rect x="3" y="14" width="7" height="7" rx="1" />
+        <rect x="14" y="14" width="7" height="7" rx="1" />
+      </svg>
+    ),
+    chat: (
+      <svg
+        width="18"
+        height="18"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+      >
+        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+      </svg>
+    ),
+    heart: (
+      <svg
+        width="18"
+        height="18"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+      >
+        <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+      </svg>
+    ),
+    pie: (
+      <svg
+        width="18"
+        height="18"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+      >
+        <path d="M21.21 15.89A10 10 0 1 1 8 2.83" />
+        <path d="M22 12A10 10 0 0 0 12 2v10z" />
+      </svg>
+    ),
+    doc: (
+      <svg
+        width="18"
+        height="18"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+      >
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+        <polyline points="14 2 14 8 20 8" />
+      </svg>
+    ),
+  };
   return (
     <div
       onClick={onClick}
@@ -76,7 +153,12 @@ function SidebarIcon({ icon, active, onClick, disabled, label }: { icon: string;
       onMouseLeave={() => setShowTooltip(false)}
       style={{
         position: "relative",
-        width: 36, height: 36, borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center",
+        width: 36,
+        height: 36,
+        borderRadius: 8,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
         color: active ? "#8C0000" : "#9ca3af",
         background: active ? "#fef2f2" : "transparent",
         cursor: disabled ? "default" : "pointer",
@@ -86,114 +168,169 @@ function SidebarIcon({ icon, active, onClick, disabled, label }: { icon: string;
     >
       {icons[icon]}
       {showTooltip && label && (
-        <div style={{
-          position: "absolute",
-          left: "calc(100% + 10px)",
-          top: "50%",
-          transform: "translateY(-50%)",
-          background: "#1f2937",
-          color: "#fff",
-          fontSize: 11,
-          fontWeight: 600,
-          padding: "4px 10px",
-          borderRadius: 6,
-          whiteSpace: "nowrap",
-          pointerEvents: "none",
-          zIndex: 9999,
-          boxShadow: "0 2px 8px rgba(0,0,0,0.2)",
-        }}>
-          {label}
-          <div style={{
+        <div
+          style={{
             position: "absolute",
-            right: "100%",
+            left: "calc(100% + 10px)",
             top: "50%",
             transform: "translateY(-50%)",
-            width: 0, height: 0,
-            borderTop: "4px solid transparent",
-            borderBottom: "4px solid transparent",
-            borderRight: "4px solid #1f2937",
-          }} />
+            background: "#1f2937",
+            color: "#fff",
+            fontSize: 11,
+            fontWeight: 600,
+            padding: "4px 10px",
+            borderRadius: 6,
+            whiteSpace: "nowrap",
+            pointerEvents: "none",
+            zIndex: 9999,
+            boxShadow: "0 2px 8px rgba(0,0,0,0.2)",
+          }}
+        >
+          {label}
+          <div
+            style={{
+              position: "absolute",
+              right: "100%",
+              top: "50%",
+              transform: "translateY(-50%)",
+              width: 0,
+              height: 0,
+              borderTop: "4px solid transparent",
+              borderBottom: "4px solid transparent",
+              borderRight: "4px solid #1f2937",
+            }}
+          />
         </div>
       )}
     </div>
-  )
+  );
 }
 
 function StatCard({
-  label, value, badge, badgeType, sub1, sub2, children,
+  label,
+  value,
+  badge,
+  badgeType,
+  sub1,
+  sub2,
+  children,
 }: {
-  label: string; value: string; badge?: React.ReactNode; badgeType?: "positive" | "negative" | "neutral"
-  sub1?: string; sub2?: string; children?: React.ReactNode
+  label: string;
+  value: string;
+  badge?: React.ReactNode;
+  badgeType?: "positive" | "negative" | "neutral";
+  sub1?: string;
+  sub2?: string;
+  children?: React.ReactNode;
 }) {
-  const badgeColor = badgeType === "positive" ? "#16a34a" : badgeType === "negative" ? "#dc2626" : "#6b7280"
-  const badgeBg = badgeType === "positive" ? "#f0fdf4" : badgeType === "negative" ? "#fef2f2" : "#f9fafb"
+  const badgeColor =
+    badgeType === "positive"
+      ? "#16a34a"
+      : badgeType === "negative"
+        ? "#dc2626"
+        : "#6b7280";
+  const badgeBg =
+    badgeType === "positive"
+      ? "#f0fdf4"
+      : badgeType === "negative"
+        ? "#fef2f2"
+        : "#f9fafb";
 
-return (
-    <div style={{
-      background: "#fff", borderRadius: 12, padding: "16px 20px",
-      boxShadow: "0 1px 4px rgba(0,0,0,0.07)", flex: 1, minWidth: 0,
-      display: "flex", flexDirection: "column", justifyContent: "space-between", minHeight: 130,
-    }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-        <span style={{ fontSize: 12, color: "#6b7280", fontWeight: 500 }}>{label}</span>
+  return (
+    <div
+      style={{
+        background: "#fff",
+        borderRadius: 12,
+        padding: "16px 20px",
+        boxShadow: "0 1px 4px rgba(0,0,0,0.07)",
+        flex: 1,
+        minWidth: 0,
+        display: "flex",
+        flexDirection: "column",
+        justifyContent: "space-between",
+        minHeight: 130,
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "flex-start",
+        }}
+      >
+        <span style={{ fontSize: 12, color: "#6b7280", fontWeight: 500 }}>
+          {label}
+        </span>
         {badge && (
-  <span
-    style={{
-      fontSize: 11,
-      fontWeight: 600,
-      color: badgeColor,
-      background: badgeBg,
-      padding: "2px 8px",
-      borderRadius: 20,
-      display: "flex",
-      alignItems: "center",
-      gap: 4,
-    }}
-  >
-    {badge}
-  </span>
-)}
+          <span
+            style={{
+              fontSize: 11,
+              fontWeight: 600,
+              color: badgeColor,
+              background: badgeBg,
+              padding: "2px 8px",
+              borderRadius: 20,
+              display: "flex",
+              alignItems: "center",
+              gap: 4,
+            }}
+          >
+            {badge}
+          </span>
+        )}
       </div>
       <div
-  style={{
-    fontSize: 28,
-    fontWeight: 700,
-    color: "#8C0000",
-    lineHeight: 1.1,
-    marginTop: label === "Persentase Berhasil" ? 6 : 0,
-  }}
->
-  {value}
-</div>
+        style={{
+          fontSize: 28,
+          fontWeight: 700,
+          color: "#8C0000",
+          lineHeight: 1.1,
+          marginTop: label === "Persentase Berhasil" ? 6 : 0,
+        }}
+      >
+        {value}
+      </div>
       <div>
         {children}
-        <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4 }}>
-          {sub1 ? <span style={{ fontSize: 11, color: "#6b7280" }}>{sub1}</span> : <span />}
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            marginTop: 4,
+          }}
+        >
+          {sub1 ? (
+            <span style={{ fontSize: 11, color: "#6b7280" }}>{sub1}</span>
+          ) : (
+            <span />
+          )}
           {sub2 && (
-            <span style={{
-              fontSize: 11,
-              color: sub2.includes("PendingMerah") ? "#db3737" : "#6b7280",
-              fontWeight: sub2.includes("PendingMerah") ? 600 : 400,
-            }}>
+            <span
+              style={{
+                fontSize: 11,
+                color: sub2.includes("PendingMerah") ? "#db3737" : "#6b7280",
+                fontWeight: sub2.includes("PendingMerah") ? 600 : 400,
+              }}
+            >
               {sub2.replace("PendingMerah:", "Pending: ")}
             </span>
           )}
         </div>
       </div>
     </div>
-  )
+  );
 }
 
-const MINI_BAR_LABELS = ["Minggu 1", "Minggu 2", "Minggu 3", "Minggu 4"]
+const MINI_BAR_LABELS = ["Minggu 1", "Minggu 2", "Minggu 3", "Minggu 4"];
 
 function MiniBar({ data }: { data: number[] }) {
-  const [hoveredIdx, setHoveredIdx] = useState<number | null>(null)
+  const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
 
   const getColor = (value: number) => {
-    if (value >= 85) return "#B00020"
-    if (value >= 70) return "#D66B7A"
-    return "#EBCDD2"
-  }
+    if (value >= 85) return "#B00020";
+    if (value >= 70) return "#D66B7A";
+    return "#EBCDD2";
+  };
 
   return (
     <div
@@ -213,32 +350,37 @@ function MiniBar({ data }: { data: number[] }) {
           onMouseLeave={() => setHoveredIdx(null)}
         >
           {hoveredIdx === i && (
-            <div style={{
-              position: "absolute",
-              bottom: "calc(100% + 6px)",
-              left: "50%",
-              transform: "translateX(-50%)",
-              background: "#1f2937",
-              color: "#fff",
-              fontSize: 10,
-              fontWeight: 600,
-              padding: "3px 7px",
-              borderRadius: 5,
-              whiteSpace: "nowrap",
-              zIndex: 99,
-              pointerEvents: "none",
-            }}>
-              {MINI_BAR_LABELS[i]}: {value}%
-              <div style={{
+            <div
+              style={{
                 position: "absolute",
-                top: "100%",
+                bottom: "calc(100% + 6px)",
                 left: "50%",
                 transform: "translateX(-50%)",
-                width: 0, height: 0,
-                borderLeft: "4px solid transparent",
-                borderRight: "4px solid transparent",
-                borderTop: "4px solid #1f2937",
-              }} />
+                background: "#1f2937",
+                color: "#fff",
+                fontSize: 10,
+                fontWeight: 600,
+                padding: "3px 7px",
+                borderRadius: 5,
+                whiteSpace: "nowrap",
+                zIndex: 99,
+                pointerEvents: "none",
+              }}
+            >
+              {MINI_BAR_LABELS[i]}: {value}%
+              <div
+                style={{
+                  position: "absolute",
+                  top: "100%",
+                  left: "50%",
+                  transform: "translateX(-50%)",
+                  width: 0,
+                  height: 0,
+                  borderLeft: "4px solid transparent",
+                  borderRight: "4px solid transparent",
+                  borderTop: "4px solid #1f2937",
+                }}
+              />
             </div>
           )}
           <div
@@ -253,183 +395,245 @@ function MiniBar({ data }: { data: number[] }) {
         </div>
       ))}
     </div>
-  )
+  );
 }
 
 type SessionIntentData = {
-  intents: { intent: string; count: number; percentage: number }[]
-  wordCloud: { word: string; count: number }[]
+  intents: { intent: string; count: number; percentage: number }[];
+  wordCloud: { word: string; count: number }[];
   sessionAnalysis: {
-    totalSessions: number
-    withIntent: number
-    withContact: number
-    dropOff: number
-  }
-}
+    totalSessions: number;
+    withIntent: number;
+    withContact: number;
+    dropOff: number;
+  };
+};
 
-function SidebarBottomIcon({ src, alt, label, onClick }: { src: string; alt: string; label: string; onClick?: () => void }) {
-  const [show, setShow] = useState(false)
+function SidebarBottomIcon({
+  src,
+  alt,
+  label,
+  onClick,
+}: {
+  src: string;
+  alt: string;
+  label: string;
+  onClick?: () => void;
+}) {
+  const [show, setShow] = useState(false);
   return (
     <div
       onClick={onClick}
-      style={{ position: "relative", width: 36, height: 36, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}
+      style={{
+        position: "relative",
+        width: 36,
+        height: 36,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        cursor: "pointer",
+      }}
       onMouseEnter={() => setShow(true)}
       onMouseLeave={() => setShow(false)}
     >
       <Image src={src} alt={alt} width={22} height={22} />
       {show && (
-        <div style={{
-          position: "absolute",
-          left: "calc(100% + 10px)",
-          top: "50%",
-          transform: "translateY(-50%)",
-          background: "#1f2937",
-          color: "#fff",
-          fontSize: 11,
-          fontWeight: 600,
-          padding: "4px 10px",
-          borderRadius: 6,
-          whiteSpace: "nowrap",
-          pointerEvents: "none",
-          zIndex: 9999,
-          boxShadow: "0 2px 8px rgba(0,0,0,0.2)",
-        }}>
-          {label}
-          <div style={{
+        <div
+          style={{
             position: "absolute",
-            right: "100%",
+            left: "calc(100% + 10px)",
             top: "50%",
             transform: "translateY(-50%)",
-            width: 0, height: 0,
-            borderTop: "4px solid transparent",
-            borderBottom: "4px solid transparent",
-            borderRight: "4px solid #1f2937",
-          }} />
+            background: "#1f2937",
+            color: "#fff",
+            fontSize: 11,
+            fontWeight: 600,
+            padding: "4px 10px",
+            borderRadius: 6,
+            whiteSpace: "nowrap",
+            pointerEvents: "none",
+            zIndex: 9999,
+            boxShadow: "0 2px 8px rgba(0,0,0,0.2)",
+          }}
+        >
+          {label}
+          <div
+            style={{
+              position: "absolute",
+              right: "100%",
+              top: "50%",
+              transform: "translateY(-50%)",
+              width: 0,
+              height: 0,
+              borderTop: "4px solid transparent",
+              borderBottom: "4px solid transparent",
+              borderRight: "4px solid #1f2937",
+            }}
+          />
         </div>
       )}
     </div>
-  )
+  );
 }
 // Main Page
 
 type UserSession = {
-  name: string
-  email: string
-  role: string
-}
+  name: string;
+  email: string;
+  role: string;
+};
 
 export default function AdminDashboardPage() {
-  const [overview, setOverview] = useState<OverviewData | null>(null)
-  const [sessionIntent, setSessionIntent] = useState<SessionIntentData | null>(null)
-  const [overviewTrend, setOverviewTrend] = useState<OverviewTrend[]>([])
-  const [loading, setLoading] = useState(true)
-  const [sidebarOpen, setSidebarOpen] = useState(true)
-  const [activeMenu, setActiveMenu] = useState("Overview")
+  const [overview, setOverview] = useState<OverviewData | null>(null);
+  const [sessionIntent, setSessionIntent] = useState<SessionIntentData | null>(
+    null,
+  );
+  const [overviewTrend, setOverviewTrend] = useState<OverviewTrend[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [activeMenu, setActiveMenu] = useState("Overview");
 
   useEffect(() => {
-    const saved = localStorage.getItem("activeMenu")
-    const valid = SIDEBAR_ICONS.map(s => s.label)
+    const saved = localStorage.getItem("activeMenu");
+    const valid = [...SIDEBAR_ICONS.map((s) => s.label), "Pengaturan"];
     if (saved && valid.includes(saved)) {
-      setActiveMenu(saved)
+      setActiveMenu(saved);
     }
-  }, [])
-  const [userSession, setUserSession] = useState<UserSession | null>(null)
-  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false)
-  const router = useRouter()
+  }, []);
+  const [userSession, setUserSession] = useState<UserSession | null>(null);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const [showUserDropdown, setShowUserDropdown] = useState(false);
+  const router = useRouter();
+
+  useEffect(() => {
+    if (!showUserDropdown) return;
+    const handler = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest(".user-dropdown-anchor")) setShowUserDropdown(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [showUserDropdown]);
 
   const handleMenuChange = (menu: string) => {
-  setActiveMenu(menu)
-  localStorage.setItem("activeMenu", menu)
-  }
+    setActiveMenu(menu);
+    localStorage.setItem("activeMenu", menu);
+  };
 
   const handleLogout = async () => {
     try {
-      await fetch("/api/auth/sign-out", { method: "POST" })
-      router.push("/admin/login")
+      await fetch("/api/auth/sign-out", { method: "POST" });
+      router.push("/admin/login");
     } catch (e) {
-      console.error("Logout failed", e)
+      console.error("Logout failed", e);
     }
-  }
+  };
 
   const fetchAll = useCallback(async () => {
-  setLoading(true)
-  try {
-    const [overviewRes, sessionRes, authRes] = await Promise.all([
-      fetch(`/api/dashboard/overview?days=30`),
-      fetch(`/api/dashboard/session-intent?days=30`),
-      fetch(`/api/auth/get-session`),
-    ])
-    const [overviewJson, sessionJson, authJson] = await Promise.all([
-      overviewRes.json(),
-      sessionRes.json(),
-      authRes.json(),
-    ])
-    if (overviewJson.status) {
-      setOverview(overviewJson.data)
-      setOverviewTrend(overviewJson.data.trend ?? [])
+    setLoading(true);
+    try {
+      const [overviewRes, sessionRes, authRes] = await Promise.all([
+        fetch(`/api/dashboard/overview?days=30`),
+        fetch(`/api/dashboard/session-intent?days=30`),
+        fetch(`/api/auth/get-session`),
+      ]);
+      const [overviewJson, sessionJson, authJson] = await Promise.all([
+        overviewRes.json(),
+        sessionRes.json(),
+        authRes.json(),
+      ]);
+      if (overviewJson.status) {
+        setOverview(overviewJson.data);
+        setOverviewTrend(overviewJson.data.trend ?? []);
+      }
+      if (sessionJson.status) setSessionIntent(sessionJson.data);
+      if (authJson?.user) {
+        setUserSession({
+          name: authJson.user.name ?? "Admin",
+          email: authJson.user.email ?? "",
+          role: authJson.user.role ?? "Admin",
+        });
+      }
+    } catch (e) {
+      console.error("Failed to fetch dashboard data", e);
+    } finally {
+      setLoading(false);
     }
-    if (sessionJson.status) setSessionIntent(sessionJson.data)
-    if (authJson?.user) {
-      setUserSession({
-        name: authJson.user.name ?? "Admin",
-        email: authJson.user.email ?? "",
-        role: authJson.user.role ?? "Admin",
-      })
-    }
-  } catch (e) {
-    console.error("Failed to fetch dashboard data", e)
-  } finally {
-    setLoading(false)
-  }
-}, [])
+  }, []);
 
-useEffect(() => { fetchAll() }, [fetchAll])
-
+  useEffect(() => {
+    fetchAll();
+  }, [fetchAll]);
 
   // Derived values
-  const totalSesi = overview?.totalChats ?? 0                             // total sesi
-  const avgRate = overview?.completionRate ?? 0                           // presentase berhasil
-  const csatPct = overview?.likePercentage ?? 0                           // tingkat kepuasan
-  const resolvedTotal = overview?.resolvedChats ?? 0                      // jumlah cht selesai
-  const unhandled = totalSesi - resolvedTotal                             // pending
-  const coveragePct = avgRate                                             // cakupan pertanyaan
-  const trend = overview?.totalChatsChange ?? null                        // badge % naik/turun total sesi
-  const completionRateChange = overview?.completionRateChange ?? null     // badge % naik/turun persentase berhasil
-  const satisfactionLabel = overview?.satisfactionLabel ?? "Puas"         // label badge tingkat kepuasan
+  const totalSesi = overview?.totalChats ?? 0; // total sesi
+  const avgRate = overview?.completionRate ?? 0; // presentase berhasil
+  const csatPct = overview?.likePercentage ?? 0; // tingkat kepuasan
+  const resolvedTotal = overview?.resolvedChats ?? 0; // jumlah cht selesai
+  const unhandled = totalSesi - resolvedTotal; // pending
+  const coveragePct = avgRate; // cakupan pertanyaan
+  const trend = overview?.totalChatsChange ?? null; // badge % naik/turun total sesi
+  const completionRateChange = overview?.completionRateChange ?? null; // badge % naik/turun persentase berhasil
+  const satisfactionLabel = overview?.satisfactionLabel ?? "Puas"; // label badge tingkat kepuasan
 
- 
-  const intents = overview?.intents ?? []
-  const intentTotal = intents.reduce((s, d) => s + d.count, 0)
+  const intents = overview?.intents ?? [];
+  const intentTotal = intents.reduce((s, d) => s + d.count, 0);
 
-  const intentsFiltered = intents.filter(d => d.intent !== "Lainnya")
-  const pieData = intentsFiltered.slice(0, 4).map(d => ({ name: d.intent, value: d.count }))
+  const intentsFiltered = intents.filter((d) => d.intent !== "Lainnya");
+  const pieData = intentsFiltered
+    .slice(0, 4)
+    .map((d) => ({ name: d.intent, value: d.count }));
 
-  const intentEntries: [string, number][] = intents.map(d => [d.intent, d.count])
-
+  const intentEntries: [string, number][] = intents.map((d) => [
+    d.intent,
+    d.count,
+  ]);
 
   // Line chart data
   const formatPeriodLabel = (period: string) => {
     if (/^\d{4}-\d{2}$/.test(period)) {
-      const [y, m] = period.split("-")
-      return new Date(Number(y), Number(m) - 1).toLocaleDateString("id-ID", { month: "short", year: "numeric" })
+      const [y, m] = period.split("-");
+      return new Date(Number(y), Number(m) - 1).toLocaleDateString("id-ID", {
+        month: "short",
+        year: "numeric",
+      });
     }
-    const d = new Date(period)
-    return d.toLocaleDateString("id-ID", { day: "numeric", month: "short" })
-  }
+    const d = new Date(period);
+    return d.toLocaleDateString("id-ID", { day: "numeric", month: "short" });
+  };
 
-  const lineData = overviewTrend.map(d => ({
+  const lineData = overviewTrend.map((d) => ({
     date: formatPeriodLabel(d.period),
     Session: d.totalChats,
     Conversion: d.completionRate,
     CSAT: d.likePercentage,
-  }))
-  
-  const topIntentsTable = intents.filter(d => d.intent !== "Lainnya").slice(0, 5).map((item, i) => {
-  const avgCount = intents.slice(0, 5).reduce((s, d) => s + d.count, 0) / Math.max(intents.slice(0, 5).length, 1)
-  const trendUp = item.count >= avgCount
-  const trendPct = Math.max(1, Math.abs(Math.round((item.count - avgCount) / Math.max(avgCount, 1) * 100 * 0.3 + 2)))
-  return { rank: i + 1, intent: item.intent, count: item.count, pct: item.percentage, trendUp, trendPct }
-  })
+  }));
+
+  const topIntentsTable = intents
+    .filter((d) => d.intent !== "Lainnya")
+    .slice(0, 5)
+    .map((item, i) => {
+      const avgCount =
+        intents.slice(0, 5).reduce((s, d) => s + d.count, 0) /
+        Math.max(intents.slice(0, 5).length, 1);
+      const trendUp = item.count >= avgCount;
+      const trendPct = Math.max(
+        1,
+        Math.abs(
+          Math.round(
+            ((item.count - avgCount) / Math.max(avgCount, 1)) * 100 * 0.3 + 2,
+          ),
+        ),
+      );
+      return {
+        rank: i + 1,
+        intent: item.intent,
+        count: item.count,
+        pct: item.percentage,
+        trendUp,
+        trendPct,
+      };
+    });
 
   return (
     <>
@@ -484,12 +688,18 @@ useEffect(() => { fetchAll() }, [fetchAll])
 
         /* Main */
         .main {
-          margin-left: 56px;
-          flex: 1;
+          position: fixed;
+          left: 56px;
+          right: 0;
+          top: 0;
+          bottom: 0;
           display: flex;
           flex-direction: column;
-          height: 100vh;
-          overflow-y: hidden;
+          transition: left 0.22s cubic-bezier(0.4,0,0.2,1);
+          will-change: left;
+        }
+        .main.sidebar-open {
+          left: 220px;
         }
 
         .content {
@@ -515,12 +725,17 @@ useEffect(() => { fetchAll() }, [fetchAll])
           right: 0;
           z-index: 90;
           height: 57px;
+          transition: left 0.22s cubic-bezier(0.4,0,0.2,1);
+          will-change: left;
+        }
+        .topbar.sidebar-open {
+          left: 220px;
         }
 
         .topbar-title {
           font-size: 20px;
           font-weight: 700;
-          color: #111827;
+          color: #a11212;
         }
 
         .mobile-sidebar-btn {
@@ -582,6 +797,67 @@ useEffect(() => { fetchAll() }, [fetchAll])
           font-size: 13px;
           font-weight: 700;
         }
+
+        .user-dropdown-anchor {
+          position: relative;
+        }
+
+        .user-dropdown-trigger {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          cursor: pointer;
+          padding: 6px 10px;
+          border-radius: 10px;
+          border: none;
+          background: transparent;
+          font-family: 'DM Sans', sans-serif;
+          transition: background 0.15s;
+        }
+        .user-dropdown-trigger:hover { background: #f3f4f6; }
+
+        .user-dropdown-menu {
+          position: absolute;
+          top: calc(100% + 6px);
+          right: 0;
+          background: #fff;
+          border: 1px solid #e5e7eb;
+          border-radius: 10px;
+          box-shadow: 0 8px 24px rgba(0,0,0,0.12), 0 2px 6px rgba(0,0,0,0.06);
+          min-width: 190px;
+          z-index: 9000;
+          overflow: hidden;
+          animation: dropIn 0.12s ease;
+        }
+        @keyframes dropIn {
+          from { opacity: 0; transform: translateY(-6px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+
+        .user-dropdown-header {
+          padding: 12px 14px 10px;
+          border-bottom: 1px solid #f3f4f6;
+        }
+
+        .user-dropdown-item {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          padding: 10px 14px;
+          font-size: 13.5px;
+          font-weight: 500;
+          color: #374151;
+          cursor: pointer;
+          border: none;
+          background: none;
+          width: 100%;
+          text-align: left;
+          font-family: 'DM Sans', sans-serif;
+          transition: background 0.12s;
+        }
+        .user-dropdown-item:hover { background: #f9fafb; }
+        .user-dropdown-item.danger { color: #8C0000; }
+        .user-dropdown-item.danger:hover { background: #fef2f2; }
 
         /* Filter bar */
         .filter-bar {
@@ -802,7 +1078,10 @@ useEffect(() => { fetchAll() }, [fetchAll])
         /* Responsive — Mobile */
         @media (max-width: 640px) {
           .sidebar { display: none; }
-          .main { margin-left: 0; overflow: hidden; }
+          .main { left: 0; }
+          .main.sidebar-open { left: 0; }
+          .topbar { left: 0; }
+          .topbar.sidebar-open { left: 0; }
           .content { padding: 12px 12px 80px;  height: calc(100vh - 57px); }
           .stat-row { grid-template-columns: 1fr; gap: 10px; margin-bottom: 14px; }
           .charts-row { grid-template-columns: 1fr; gap: 10px; margin-bottom: 10px; }
@@ -914,54 +1193,72 @@ useEffect(() => { fetchAll() }, [fetchAll])
       <div className="dash-layout">
         {/* Sidebar */}
         <aside className="sidebar">
-          <div className="sidebar-accent" style={{
-            top: (() => {
-              const idx = SIDEBAR_ICONS.findIndex(s => s.label === activeMenu)
-              return `${69 + idx * 42}px`
-            })()
-          }} />
           <div
-            style={{ marginBottom: 16, cursor: "pointer", position: "relative" }}
-            onClick={() => setSidebarOpen(true)}
-            onMouseEnter={e => {
-              const el = e.currentTarget.querySelector(".sidebar-tooltip") as HTMLElement
-              if (el) el.style.display = "block"
+            className="sidebar-accent"
+            style={{
+              top: (() => {
+                const idx = SIDEBAR_ICONS.findIndex(
+                  (s) => s.label === activeMenu,
+                );
+                return `${69 + idx * 42}px`;
+              })(),
             }}
-            onMouseLeave={e => {
-              const el = e.currentTarget.querySelector(".sidebar-tooltip") as HTMLElement
-              if (el) el.style.display = "none"
+          />
+          <div
+            style={{
+              marginBottom: 16,
+              cursor: "pointer",
+              position: "relative",
+            }}
+            onClick={() => setSidebarOpen(true)}
+            onMouseEnter={(e) => {
+              const el = e.currentTarget.querySelector(
+                ".sidebar-tooltip",
+              ) as HTMLElement;
+              if (el) el.style.display = "block";
+            }}
+            onMouseLeave={(e) => {
+              const el = e.currentTarget.querySelector(
+                ".sidebar-tooltip",
+              ) as HTMLElement;
+              if (el) el.style.display = "none";
             }}
           >
-            
             <Image src="/ikon-sidebar.png" alt="menu" width={32} height={32} />
-            <div className="sidebar-tooltip" style={{
-              display: "none",
-              position: "absolute",
-              left: "calc(100% + 10px)",
-              top: "50%",
-              transform: "translateY(-50%)",
-              background: "#1f2937",
-              color: "#fff",
-              fontSize: 11,
-              fontWeight: 600,
-              padding: "4px 10px",
-              borderRadius: 6,
-              whiteSpace: "nowrap",
-              pointerEvents: "none",
-              zIndex: 9999,
-              boxShadow: "0 2px 8px rgba(0,0,0,0.2)",
-            }}>
-              Buka Menu
-              <div style={{
+            <div
+              className="sidebar-tooltip"
+              style={{
+                display: "none",
                 position: "absolute",
-                right: "100%",
+                left: "calc(100% + 10px)",
                 top: "50%",
                 transform: "translateY(-50%)",
-                width: 0, height: 0,
-                borderTop: "4px solid transparent",
-                borderBottom: "4px solid transparent",
-                borderRight: "4px solid #1f2937",
-              }} />
+                background: "#1f2937",
+                color: "#fff",
+                fontSize: 11,
+                fontWeight: 600,
+                padding: "4px 10px",
+                borderRadius: 6,
+                whiteSpace: "nowrap",
+                pointerEvents: "none",
+                zIndex: 9999,
+                boxShadow: "0 2px 8px rgba(0,0,0,0.2)",
+              }}
+            >
+              Buka Menu
+              <div
+                style={{
+                  position: "absolute",
+                  right: "100%",
+                  top: "50%",
+                  transform: "translateY(-50%)",
+                  width: 0,
+                  height: 0,
+                  borderTop: "4px solid transparent",
+                  borderBottom: "4px solid transparent",
+                  borderRight: "4px solid #1f2937",
+                }}
+              />
             </div>
           </div>
 
@@ -977,10 +1274,20 @@ useEffect(() => { fetchAll() }, [fetchAll])
           ))}
 
           <div className="sidebar-bottom">
-            <SidebarBottomIcon src="/settings.png" alt="settings" label="Pengaturan" />
-            <SidebarBottomIcon src="/logout.png" alt="logout" label="Keluar" onClick={() => setShowLogoutConfirm(true)} />
+            <SidebarBottomIcon
+              src="/settings.png"
+              alt="settings"
+              label="Pengaturan"
+              onClick={() => handleMenuChange("Pengaturan")}
+            />
+            <SidebarBottomIcon
+              src="/logout.png"
+              alt="logout"
+              label="Keluar"
+              onClick={() => setShowLogoutConfirm(true)}
+            />
           </div>
-          </aside>
+        </aside>
 
         <SidebarExpanded
           open={sidebarOpen}
@@ -991,61 +1298,148 @@ useEffect(() => { fetchAll() }, [fetchAll])
         />
 
         {/* Main */}
-        <div className="main">
+        <div className={`main${sidebarOpen ? " sidebar-open" : ""}`}>
           {/* Topbar */}
-          <header className="topbar">
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            {/* Tombol sidebar mobile */}
-            <button
-              className="mobile-sidebar-btn"
-              onClick={() => setSidebarOpen(true)}
-            >
-              <Image
-                src="/ikon-sidebar.png"
-                alt="menu"
-                width={24}
-                height={24}
-              />
-            </button>
+          <header className={`topbar${sidebarOpen ? " sidebar-open" : ""}`}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              {/* Tombol sidebar mobile */}
+              <button
+                className="mobile-sidebar-btn"
+                onClick={() => setSidebarOpen(true)}
+              >
+                <Image
+                  src="/ikon-sidebar.png"
+                  alt="menu"
+                  width={24}
+                  height={24}
+                />
+              </button>
 
-            <h1 className="topbar-title">Admin Dashboard</h1>
-          </div>
+              <h1 className="topbar-title">Admin Dashboard</h1>
+            </div>
 
-          <div className="topbar-right">
-              <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 8,
-            cursor: "pointer",
-          }}
-        >
-          <div className="user-avatar">
-          {userSession?.name ? userSession.name.split(" ").map(w => w[0]).join("").substring(0, 2).toUpperCase() : "AD"}
-        </div>
-        <div className="user-pill-text" style={{ marginLeft: 8 }}>
-          <div style={{ fontSize: 13, fontWeight: 600, color: "#111827", lineHeight: 1.2 }}>
-            {userSession?.name ?? "Admin"}
-          </div>
-          <div style={{ fontSize: 11, color: "#9ca3af" }}>
-            {userSession?.role ?? "Admin"}
-          </div>
-        </div>
+            <div className="topbar-right">
+              <div className="user-dropdown-anchor">
+                <button
+                  className="user-dropdown-trigger"
+                  onClick={() => setShowUserDropdown((v) => !v)}
+                >
+                  <div className="user-avatar">
+                    {userSession?.name
+                      ? userSession.name
+                          .split(" ")
+                          .map((w) => w[0])
+                          .join("")
+                          .substring(0, 2)
+                          .toUpperCase()
+                      : "AD"}
+                  </div>
+                  <div className="user-pill-text" style={{ textAlign: "left" }}>
+                    <div
+                      style={{
+                        fontSize: 13,
+                        fontWeight: 600,
+                        color: "#111827",
+                        lineHeight: 1.2,
+                      }}
+                    >
+                      {userSession?.name ?? "Admin"}
+                    </div>
+                    <div style={{ fontSize: 11, color: "#9ca3af" }}>
+                      {userSession?.role ?? "Admin"}
+                    </div>
+                  </div>
+                  <svg
+                    className="user-pill-text"
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="#9ca3af"
+                    strokeWidth="2"
+                    style={{
+                      transition: "transform 0.15s",
+                      transform: showUserDropdown
+                        ? "rotate(180deg)"
+                        : "rotate(0deg)",
+                    }}
+                  >
+                    <polyline points="6 9 12 15 18 9" />
+                  </svg>
+                </button>
 
-          <svg
-            className="user-pill-text"
-            width="14"
-            height="14"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="#9ca3af"
-            strokeWidth="2"
-          >
-            <polyline points="6 9 12 15 18 9" />
-          </svg>
-        </div>
-      </div>
-      </header>
+                {showUserDropdown && (
+                  <div className="user-dropdown-menu">
+                    <div className="user-dropdown-header">
+                      <div
+                        style={{
+                          fontSize: 13,
+                          fontWeight: 600,
+                          color: "#111827",
+                        }}
+                      >
+                        {userSession?.name ?? "Admin"}
+                      </div>
+                      <div
+                        style={{
+                          fontSize: 11.5,
+                          color: "#9ca3af",
+                          marginTop: 2,
+                        }}
+                      >
+                        {userSession?.email ?? ""}
+                      </div>
+                    </div>
+                    <button
+                      className="user-dropdown-item"
+                      onClick={() => {
+                        setShowUserDropdown(false);
+                        handleMenuChange("Pengaturan");
+                      }}
+                    >
+                      <svg
+                        width="15"
+                        height="15"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        <circle cx="12" cy="12" r="3" />
+                        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                      </svg>
+                      Pengaturan
+                    </button>
+                    <button
+                      className="user-dropdown-item danger"
+                      onClick={() => {
+                        setShowUserDropdown(false);
+                        setShowLogoutConfirm(true);
+                      }}
+                    >
+                      <svg
+                        width="15"
+                        height="15"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                        <polyline points="16 17 21 12 16 7" />
+                        <line x1="21" y1="12" x2="9" y2="12" />
+                      </svg>
+                      Keluar
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          </header>
 
           {/* Content */}
           <div className="content">
@@ -1057,303 +1451,701 @@ useEffect(() => { fetchAll() }, [fetchAll])
               <DokumenPage />
             ) : activeMenu === "Performa dan Teknis" ? (
               <PerformaTeknis />
+            ) : activeMenu === "Pengaturan" ? (
+              <PengaturanPage />
             ) : (
-            <div style={{ minHeight: "calc(100vh - 110px)" }}>
+              <div style={{ minHeight: "calc(100vh - 110px)" }}>
+                {/* Stat cards */}
+                <div className="stat-row">
+                  {/* Total sesi */}
+                  <StatCard
+                    label="Total Sesi"
+                    value={loading ? "—" : totalSesi.toLocaleString("id-ID")}
+                    badge={
+                      loading || trend === null
+                        ? undefined
+                        : `${trend > 0 ? "+" : ""}${trend.toLocaleString("id-ID", { maximumFractionDigits: 1 })}%`
+                    }
+                    badgeType={
+                      trend === null
+                        ? "neutral"
+                        : trend >= 0
+                          ? "positive"
+                          : "negative"
+                    }
+                    sub1={
+                      loading ? undefined : `Resolved: ${fmtNum(resolvedTotal)}`
+                    }
+                    sub2={
+                      loading ? undefined : `Bulan ini: ${fmtNum(totalSesi)}`
+                    }
+                  >
+                    {loading ? (
+                      <div
+                        className="skeleton"
+                        style={{ height: 4, width: "100%", borderRadius: 2 }}
+                      />
+                    ) : (
+                      <div
+                        style={{
+                          height: 4,
+                          width: "100%",
+                          background: "#e5e7eb",
+                          borderRadius: 2,
+                        }}
+                      >
+                        <div
+                          style={{
+                            height: "100%",
+                            background: "#8C0000",
+                            borderRadius: 2,
+                            width: `${Math.min(avgRate, 100)}%`,
+                          }}
+                        />
+                      </div>
+                    )}
+                  </StatCard>
 
-            {/* Stat cards */}
-            <div className="stat-row">
-              {/* Total sesi */}
-              <StatCard
-                label="Total Sesi"
-                value={loading ? "—" : totalSesi.toLocaleString("id-ID")}
-                badge={loading || trend === null ? undefined : `${trend > 0 ? "+" : ""}${trend.toLocaleString("id-ID", { maximumFractionDigits: 1 })}%`}
-                badgeType={trend === null ? "neutral" : trend >= 0 ? "positive" : "negative"}
-                sub1={loading ? undefined : `Resolved: ${fmtNum(resolvedTotal)}`}
-                sub2={loading ? undefined : `Bulan ini: ${fmtNum(totalSesi)}`}
-              >
-                {loading ? (
-                <div className="skeleton" style={{ height: 4, width: "100%", borderRadius: 2 }} />
-              ) : (
-                <div style={{ height: 4, width: "100%", background: "#e5e7eb", borderRadius: 2 }}>
-                  <div style={{ height: "100%", background: "#8C0000", borderRadius: 2, width: `${Math.min(avgRate, 100)}%` }} />
+                  {/* Persentase berhasil */}
+                  <StatCard
+                    label="Persentase Berhasil"
+                    value={
+                      loading
+                        ? "—"
+                        : `${avgRate.toLocaleString("id-ID", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`
+                    }
+                    badge={
+                      completionRateChange === null
+                        ? undefined
+                        : `${completionRateChange > 0 ? "+" : ""}${completionRateChange.toLocaleString("id-ID", { maximumFractionDigits: 1 })}%`
+                    }
+                    badgeType={
+                      completionRateChange === null
+                        ? "neutral"
+                        : completionRateChange >= 0
+                          ? "positive"
+                          : "negative"
+                    }
+                  />
+
+                  {/* Tingkat kepuasan */}
+                  <StatCard
+                    label="Tingkat Kepuasan"
+                    value={
+                      loading
+                        ? "—"
+                        : `${csatPct.toLocaleString("id-ID", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`
+                    }
+                    badge={
+                      <>
+                        <Image
+                          src="/high.png"
+                          alt="high"
+                          width={10}
+                          height={10}
+                        />
+                        {satisfactionLabel}
+                      </>
+                    }
+                    badgeType={
+                      csatPct >= 70
+                        ? "positive"
+                        : csatPct >= 50
+                          ? "neutral"
+                          : "negative"
+                    }
+                    sub1={loading ? undefined : "User puas terhadap layanan"}
+                  />
+
+                  {/* Cakupan pertanyaan */}
+                  <StatCard
+                    label="Cakupan Pertanyaan"
+                    value={
+                      loading
+                        ? "—"
+                        : `${Number(coveragePct).toLocaleString("id-ID")}%`
+                    }
+                    sub1={
+                      loading ? undefined : `Selesai: ${fmtNum(resolvedTotal)}`
+                    }
+                    sub2={loading ? undefined : `PendingMerah:${unhandled}`}
+                  />
                 </div>
-              )}
-              </StatCard>
 
-              {/* Persentase berhasil */}
-              <StatCard
-                label="Persentase Berhasil"
-                value={loading ? "—" : `${avgRate.toLocaleString("id-ID", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`}
-                badge={completionRateChange === null ? undefined : `${completionRateChange > 0 ? "+" : ""}${completionRateChange.toLocaleString("id-ID", { maximumFractionDigits: 1 })}%`}
-                badgeType={completionRateChange === null ? "neutral" : completionRateChange >= 0 ? "positive" : "negative"}
-              />
-
-              {/* Tingkat kepuasan */}
-              <StatCard
-                label="Tingkat Kepuasan"
-                value={loading ? "—" : `${csatPct.toLocaleString("id-ID", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`}
-                badge={
-                  <>
-                    <Image
-                      src="/high.png"
-                      alt="high"
-                      width={10}
-                      height={10}
-                    />
-                    {satisfactionLabel}
-                  </>
-                }
-                badgeType={csatPct >= 70 ? "positive" : csatPct >= 50 ? "neutral" : "negative"}
-                sub1={loading ? undefined : "User puas terhadap layanan"}
-              />
-              
-
-              {/* Cakupan pertanyaan */}
-              <StatCard
-                label="Cakupan Pertanyaan"
-                value={loading ? "—" : `${Number(coveragePct).toLocaleString("id-ID")}%`}
-                sub1={loading ? undefined : `Selesai: ${fmtNum(resolvedTotal)}`}
-                sub2={loading ? undefined : `PendingMerah:${unhandled}`}
-              />
-            </div>
-
-            {/* Charts row */}
-            <div className="charts-row">
-              {/* Line chart */}
-            <div className="chart-card">
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 4 }}>
-                <div>
-                  <div className="chart-title" style={{ fontSize: 16, fontWeight: 700 }}>Trend line 30 hari terakhir</div>
-                  <div className="chart-sub">Total sesi, Persentase Berhasil, dan Tingkat Kepuasan</div>
-                </div>
-                <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
-                  {[
-                    { label: "Session",    bg: "#dbeafe", color: "#2563eb" },
-                    { label: "Conversion", bg: "#dcfce7", color: "#16a34a" },
-                    { label: "CSAT",       bg: "#fef9c3", color: "#ca8a04" },
-                  ].map(l => (
-                    <span key={l.label} style={{
-                      padding: "3px 12px", borderRadius: 20,
-                      background: l.bg, color: l.color,
-                      fontSize: 11.5, fontWeight: 600,
-                    }}>
-                      {l.label}
-                    </span>
-                  ))}
-                </div>
-              </div>
-
-              {loading ? (
-                <div className="skeleton" style={{ height: 280, width: "100%", borderRadius: 8 }} />
-              ) : lineData.length > 0 ? (
-                <ResponsiveContainer width="100%" height={280}>
-
-            <LineChart
-              data={lineData}
-              margin={{ top: 20, right: 20, left: -10, bottom: 0 }}
-            >
-              <CartesianGrid strokeDasharray="0" stroke="#f3f4f6" vertical={false} />
-              <XAxis
-                dataKey="date"
-                tick={{ fontSize: 11, fill: "#9ca3af" }}
-                tickLine={false}
-                axisLine={false}
-              />
-              <YAxis
-                domain={["auto", "auto"]}
-                tick={false}
-                tickLine={false}
-                axisLine={false}
-                width={0}
-              />
-              <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #e5e7eb" }} />
-              <Line type="monotone" dataKey="Session" stroke="#2563eb" strokeWidth={2.5} dot={false} activeDot={{ r: 4 }} />
-              <Line type="monotone" dataKey="Conversion" stroke="#ca8a04" strokeWidth={2.5} dot={false} activeDot={{ r: 4 }} />
-              <Line type="monotone" dataKey="CSAT" stroke="#16a34a" strokeWidth={2.5} dot={false} activeDot={{ r: 4 }} />
-            </LineChart>
-            </ResponsiveContainer>
-              ) : (
-                <div style={{ height: 280, display: "flex", alignItems: "center", justifyContent: "center", color: "#9ca3af", fontSize: 13 }}>
-                  Belum ada data untuk periode ini
-                </div>
-              )}
-            </div>
-
-              {/* Pie chart */}
-              <div className="chart-card">
-                <div className="chart-title">Pembagian Jenis Intent</div>
-                <div className="chart-sub">Breakdown kategori intent utama</div>
-
-                {loading ? (
-                  <div className="skeleton" style={{ height: 160, width: 160, borderRadius: "50%", margin: "0 auto 16px" }} />
-                ) : pieData.length > 0 ? (
-                  <>
-                    <ResponsiveContainer width="100%" height={170}>
-                      <PieChart>
-                        <Pie data={pieData} cx="50%" cy="50%" innerRadius={52} outerRadius={78} dataKey="value" strokeWidth={2}>
-                          {pieData.map((_, i) => (
-                            <Cell key={i} fill={INTENT_COLORS[i % INTENT_COLORS.length]} />
-                          ))}
-                        </Pie>
-                        <Tooltip formatter={(v) => [`${v} sesi`, ""]} contentStyle={{ fontSize: 12, borderRadius: 8 }} />
-                      </PieChart>
-                    </ResponsiveContainer>
-                    <div style={{ marginTop: 8 }}>
-                      {pieData.map((d, i) => (
-                        <div className="pie-legend-row" key={i}>
-                          <div className="pie-legend-left">
-                            <div className="pie-legend-dot" style={{ background: INTENT_COLORS[i % INTENT_COLORS.length] }} />
-                            <span>{d.name}</span>
-                          </div>
-                          <span className="pie-legend-pct">
-                            {intentTotal > 0 ? Math.round(d.value / intentTotal * 100) : 0}%
-                          </span>
+                {/* Charts row */}
+                <div className="charts-row">
+                  {/* Line chart */}
+                  <div className="chart-card">
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "flex-start",
+                        marginBottom: 4,
+                      }}
+                    >
+                      <div>
+                        <div
+                          className="chart-title"
+                          style={{ fontSize: 16, fontWeight: 700 }}
+                        >
+                          Trend line 30 hari terakhir
                         </div>
-                      ))}
+                        <div className="chart-sub">
+                          Total sesi, Persentase Berhasil, dan Tingkat Kepuasan
+                        </div>
+                      </div>
+                      <div
+                        style={{
+                          display: "flex",
+                          gap: 6,
+                          alignItems: "center",
+                          flexWrap: "wrap",
+                        }}
+                      >
+                        {[
+                          { label: "Session", bg: "#dbeafe", color: "#2563eb" },
+                          {
+                            label: "Conversion",
+                            bg: "#dcfce7",
+                            color: "#16a34a",
+                          },
+                          { label: "CSAT", bg: "#fef9c3", color: "#ca8a04" },
+                        ].map((l) => (
+                          <span
+                            key={l.label}
+                            style={{
+                              padding: "3px 12px",
+                              borderRadius: 20,
+                              background: l.bg,
+                              color: l.color,
+                              fontSize: 11.5,
+                              fontWeight: 600,
+                            }}
+                          >
+                            {l.label}
+                          </span>
+                        ))}
+                      </div>
                     </div>
-                  </>
-                ) : (
-                  <div style={{ height: 200, display: "flex", alignItems: "center", justifyContent: "center", color: "#9ca3af", fontSize: 13 }}>
-                    Belum ada data intent
-                  </div>
-                )}
-              </div>
-            </div>
 
-            {/* Bottom row */}
-            <div className="bottom-row">
-              {/* Top intents table */}
-            <div className="chart-card">
-              <div style={{ marginBottom: 16 }}>
-                <div style={{ fontSize: 20, fontWeight: 700, color: "#111827", marginBottom: 4 }}>Top Intent</div>
-                <div style={{ fontSize: 13, color: "#9ca3af" }}>Berdasarkan jumlah query</div>
-              </div>
-
-              {loading ? (
-                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                  {[...Array(5)].map((_, i) => (
-                    <div key={i} className="skeleton" style={{ height: 44, borderRadius: 8 }} />
-                  ))}
-                </div>
-              ) : (
-                <div style={{ width: "100%", overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
-                <table style={{
-                  width: "100%",
-                  minWidth: 480,
-                  borderCollapse: "separate",
-                  borderSpacing: 0,
-                  border: "1.5px solid #e5e7eb",
-                  borderRadius: 12,
-                  overflow: "hidden",
-                }}>
-                  <thead>
-                    <tr>
-                      {["Rank", "Intent", "Query", "%", "Trend"].map((h, i) => (
-                        <th key={h} style={{
-                          padding: "12px 16px",
-                          textAlign: "center",
-                          fontSize: 13,
-                          fontWeight: 600,
-                          color: "#374151",
-                          background: "#fef2f2",
-                          ...(i === 4 ? { borderRight: "none" } : {}),
-                        }}>{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {topIntentsTable.length > 0 ? topIntentsTable.map((row, idx) => {
-                      // simulasi trend: positif jika pct > rata-rata
-                      const avg = topIntentsTable.reduce((s, r) => s + r.pct, 0) / topIntentsTable.length
-                      const trendUp = row.pct >= avg
-                      const trendPct = Math.abs(Math.round((row.pct - avg) * 0.8 + 2))
-                      return (
-                        <tr key={row.rank}>
-                          <td style={{ padding: "16px", textAlign: "center", fontSize: 14, color: "#374151", borderBottom: "1.5px solid #e5e7eb", }}>
-                            {row.rank}
-                          </td>
-                          <td style={{ padding: "16px", fontSize: 14, color: "#111827", borderBottom: "1.5px solid #e5e7eb", }}>
-                            {row.intent}
-                          </td>
-                          <td style={{
-                            padding: "16px",
-                            fontSize: 14,
-                            color: "#374151",
-                            borderBottom: "1.5px solid #e5e7eb",
-                            textAlign: "center",
-                          }}>
-                            {row.count.toLocaleString("id-ID")}
-                          </td>
-                          <td style={{ padding: "16px", fontSize: 14, color: "#374151", borderBottom: "1.5px solid #e5e7eb", }}>
-                            {row.pct}%
-                          </td>
-                          <td style={{ padding: "16px", borderBottom: "1.5px solid #e5e7eb", }}>
-                          <div style={{
+                    {loading ? (
+                      <div
+                        className="skeleton"
+                        style={{ height: 280, width: "100%", borderRadius: 8 }}
+                      />
+                    ) : lineData.length > 0 ? (
+                      <ResponsiveContainer width="100%" height={280}>
+                        <LineChart
+                          data={lineData}
+                          margin={{ top: 20, right: 20, left: -10, bottom: 0 }}
+                        >
+                          <CartesianGrid
+                            strokeDasharray="0"
+                            stroke="#f3f4f6"
+                            vertical={false}
+                          />
+                          <XAxis
+                            dataKey="date"
+                            tick={{ fontSize: 11, fill: "#9ca3af" }}
+                            tickLine={false}
+                            axisLine={false}
+                          />
+                          <YAxis
+                            domain={["auto", "auto"]}
+                            tick={false}
+                            tickLine={false}
+                            axisLine={false}
+                            width={0}
+                          />
+                          <Tooltip
+                            contentStyle={{
+                              fontSize: 12,
+                              borderRadius: 8,
+                              border: "1px solid #e5e7eb",
+                            }}
+                          />
+                          <Line
+                            type="monotone"
+                            dataKey="Session"
+                            stroke="#2563eb"
+                            strokeWidth={2.5}
+                            dot={false}
+                            activeDot={{ r: 4 }}
+                          />
+                          <Line
+                            type="monotone"
+                            dataKey="Conversion"
+                            stroke="#ca8a04"
+                            strokeWidth={2.5}
+                            dot={false}
+                            activeDot={{ r: 4 }}
+                          />
+                          <Line
+                            type="monotone"
+                            dataKey="CSAT"
+                            stroke="#16a34a"
+                            strokeWidth={2.5}
+                            dot={false}
+                            activeDot={{ r: 4 }}
+                          />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <div
+                        style={{
+                          height: 280,
                           display: "flex",
                           alignItems: "center",
                           justifyContent: "center",
-                          gap: 6,
-                        }}>
-                            <span style={{ fontSize: 16, lineHeight: 1, color: trendUp ? "#16a34a" : "#dc2626" }}>
-                              {trendUp ? "↑" : "↓"}
-                            </span>
-                            <span style={{ fontSize: 13, fontWeight: 700, color: trendUp ? "#16a34a" : "#dc2626" }}>
-                              {trendPct}%
-                            </span>
-                          </div>
-                        </td>
-                        </tr>
-                      )
-                    }) : (
-                      <tr><td colSpan={5} style={{ textAlign: "center", color: "#9ca3af", padding: 32, fontSize: 13 }}>Belum ada data</td></tr>
+                          color: "#9ca3af",
+                          fontSize: 13,
+                        }}
+                      >
+                        Belum ada data untuk periode ini
+                      </div>
                     )}
-                  </tbody>
-                </table>
-                </div> 
-              )}
-            </div>
+                  </div>
 
-              {/* Word cloud pertanyaan */}
-            <div className="chart-card" style={{ display: "flex", flexDirection: "column" }}>
-              <div className="chart-title">Word Cloud Pertanyaan</div>
-              <div className="chart-sub">Free-text queries paling populer</div>
-              {(() => {
-              const wordCloudWords = (sessionIntent?.wordCloud ?? []).map(w => ({ text: w.word, count: w.count }))
-              return (
-                <div className="wc-bg" style={{ marginTop: 8, flex: 1 }}>
-                  {loading ? (
-                    <div style={{
-                      height: 180, borderRadius: 8,
-                      background: "linear-gradient(90deg,#f0f0f0 25%,#e8e8e8 50%,#f0f0f0 75%)",
-                      backgroundSize: "200% 100%",
-                      animation: "shimmer 1.4s infinite",
-                    }} />
-                  ) : wordCloudWords.length > 0 ? (
-                    <div style={{
-                      position: "relative", minHeight: "100%", borderRadius: 24,
-                      background: "#f3dede", padding: "24px 16px",
-                      display: "flex", flexWrap: "wrap", gap: 10,
-                      alignItems: "center", justifyContent: "center",
-                    }}>
-                      <WordCloud words={wordCloudWords} />
+                  {/* Pie chart */}
+                  <div className="chart-card">
+                    <div className="chart-title">Pembagian Jenis Intent</div>
+                    <div className="chart-sub">
+                      Breakdown kategori intent utama
                     </div>
-                  ) : (
-                    <div style={{ position: "relative", height: 320, borderRadius: 24, background: "#f3dede", overflow: "hidden" }}>
-                      <span style={{ position: "absolute", top: "48%", left: "50%", transform: "translate(-50%, -50%)", fontSize: 52, fontWeight: 800, color: "#3b82f6", whiteSpace: "nowrap" }}>Pengaduan</span>
-                      <span style={{ position: "absolute", top: "22%", left: "16%", fontSize: 36, fontWeight: 500, color: "#60a5fa", whiteSpace: "nowrap" }}>pinjol</span>
-                      <span style={{ position: "absolute", top: "23%", left: "50%", transform: "translateX(-50%)", fontSize: 38, fontWeight: 500, color: "#047857", whiteSpace: "nowrap" }}>SLIK</span>
-                      <span style={{ position: "absolute", top: "24%", right: "18%", fontSize: 26, fontWeight: 500, color: "#111827", whiteSpace: "nowrap" }}>legalitas</span>
-                      <span style={{ position: "absolute", bottom: "26%", left: "8%", fontSize: 34, fontWeight: 500, color: "#047857", whiteSpace: "nowrap" }}>call center</span>
-                      <span style={{ position: "absolute", bottom: "26%", right: "16%", fontSize: 36, fontWeight: 500, color: "#9ca3af", whiteSpace: "nowrap" }}>investasi</span>
-                      <span style={{ position: "absolute", bottom: "18%", left: "50%", transform: "translateX(-50%)", fontSize: 28, fontWeight: 500, color: "#60a5fa", whiteSpace: "nowrap" }}>ojk</span>
-                    </div>
-                  )}
+
+                    {loading ? (
+                      <div
+                        className="skeleton"
+                        style={{
+                          height: 160,
+                          width: 160,
+                          borderRadius: "50%",
+                          margin: "0 auto 16px",
+                        }}
+                      />
+                    ) : pieData.length > 0 ? (
+                      <>
+                        <ResponsiveContainer width="100%" height={170}>
+                          <PieChart>
+                            <Pie
+                              data={pieData}
+                              cx="50%"
+                              cy="50%"
+                              innerRadius={52}
+                              outerRadius={78}
+                              dataKey="value"
+                              strokeWidth={2}
+                            >
+                              {pieData.map((_, i) => (
+                                <Cell
+                                  key={i}
+                                  fill={INTENT_COLORS[i % INTENT_COLORS.length]}
+                                />
+                              ))}
+                            </Pie>
+                            <Tooltip
+                              formatter={(v) => [`${v} sesi`, ""]}
+                              contentStyle={{ fontSize: 12, borderRadius: 8 }}
+                            />
+                          </PieChart>
+                        </ResponsiveContainer>
+                        <div style={{ marginTop: 8 }}>
+                          {pieData.map((d, i) => (
+                            <div className="pie-legend-row" key={i}>
+                              <div className="pie-legend-left">
+                                <div
+                                  className="pie-legend-dot"
+                                  style={{
+                                    background:
+                                      INTENT_COLORS[i % INTENT_COLORS.length],
+                                  }}
+                                />
+                                <span>{d.name}</span>
+                              </div>
+                              <span className="pie-legend-pct">
+                                {intentTotal > 0
+                                  ? Math.round((d.value / intentTotal) * 100)
+                                  : 0}
+                                %
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </>
+                    ) : (
+                      <div
+                        style={{
+                          height: 200,
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          color: "#9ca3af",
+                          fontSize: 13,
+                        }}
+                      >
+                        Belum ada data intent
+                      </div>
+                    )}
+                  </div>
                 </div>
-              )
-              })()} 
-            </div>
-            </div>
-                 </div>
+
+                {/* Bottom row */}
+                <div className="bottom-row">
+                  {/* Top intents table */}
+                  <div className="chart-card">
+                    <div style={{ marginBottom: 16 }}>
+                      <div
+                        style={{
+                          fontSize: 20,
+                          fontWeight: 700,
+                          color: "#111827",
+                          marginBottom: 4,
+                        }}
+                      >
+                        Top Intent
+                      </div>
+                      <div style={{ fontSize: 13, color: "#9ca3af" }}>
+                        Berdasarkan jumlah query
+                      </div>
+                    </div>
+
+                    {loading ? (
+                      <div
+                        style={{
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: 10,
+                        }}
+                      >
+                        {[...Array(5)].map((_, i) => (
+                          <div
+                            key={i}
+                            className="skeleton"
+                            style={{ height: 44, borderRadius: 8 }}
+                          />
+                        ))}
+                      </div>
+                    ) : (
+                      <div
+                        style={{
+                          width: "100%",
+                          overflowX: "auto",
+                          WebkitOverflowScrolling: "touch",
+                        }}
+                      >
+                        <table
+                          style={{
+                            width: "100%",
+                            minWidth: 480,
+                            borderCollapse: "separate",
+                            borderSpacing: 0,
+                            border: "1.5px solid #e5e7eb",
+                            borderRadius: 12,
+                            overflow: "hidden",
+                          }}
+                        >
+                          <thead>
+                            <tr>
+                              {["Rank", "Intent", "Query", "%", "Trend"].map(
+                                (h, i) => (
+                                  <th
+                                    key={h}
+                                    style={{
+                                      padding: "12px 16px",
+                                      textAlign: "center",
+                                      fontSize: 13,
+                                      fontWeight: 600,
+                                      color: "#374151",
+                                      background: "#fef2f2",
+                                      ...(i === 4
+                                        ? { borderRight: "none" }
+                                        : {}),
+                                    }}
+                                  >
+                                    {h}
+                                  </th>
+                                ),
+                              )}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {topIntentsTable.length > 0 ? (
+                              topIntentsTable.map((row, idx) => {
+                                // simulasi trend: positif jika pct > rata-rata
+                                const avg =
+                                  topIntentsTable.reduce(
+                                    (s, r) => s + r.pct,
+                                    0,
+                                  ) / topIntentsTable.length;
+                                const trendUp = row.pct >= avg;
+                                const trendPct = Math.abs(
+                                  Math.round((row.pct - avg) * 0.8 + 2),
+                                );
+                                return (
+                                  <tr key={row.rank}>
+                                    <td
+                                      style={{
+                                        padding: "16px",
+                                        textAlign: "center",
+                                        fontSize: 14,
+                                        color: "#374151",
+                                        borderBottom: "1.5px solid #e5e7eb",
+                                      }}
+                                    >
+                                      {row.rank}
+                                    </td>
+                                    <td
+                                      style={{
+                                        padding: "16px",
+                                        fontSize: 14,
+                                        color: "#111827",
+                                        borderBottom: "1.5px solid #e5e7eb",
+                                      }}
+                                    >
+                                      {row.intent}
+                                    </td>
+                                    <td
+                                      style={{
+                                        padding: "16px",
+                                        fontSize: 14,
+                                        color: "#374151",
+                                        borderBottom: "1.5px solid #e5e7eb",
+                                        textAlign: "center",
+                                      }}
+                                    >
+                                      {row.count.toLocaleString("id-ID")}
+                                    </td>
+                                    <td
+                                      style={{
+                                        padding: "16px",
+                                        fontSize: 14,
+                                        color: "#374151",
+                                        borderBottom: "1.5px solid #e5e7eb",
+                                      }}
+                                    >
+                                      {row.pct}%
+                                    </td>
+                                    <td
+                                      style={{
+                                        padding: "16px",
+                                        borderBottom: "1.5px solid #e5e7eb",
+                                      }}
+                                    >
+                                      <div
+                                        style={{
+                                          display: "flex",
+                                          alignItems: "center",
+                                          justifyContent: "center",
+                                          gap: 6,
+                                        }}
+                                      >
+                                        <span
+                                          style={{
+                                            fontSize: 16,
+                                            lineHeight: 1,
+                                            color: trendUp
+                                              ? "#16a34a"
+                                              : "#dc2626",
+                                          }}
+                                        >
+                                          {trendUp ? "↑" : "↓"}
+                                        </span>
+                                        <span
+                                          style={{
+                                            fontSize: 13,
+                                            fontWeight: 700,
+                                            color: trendUp
+                                              ? "#16a34a"
+                                              : "#dc2626",
+                                          }}
+                                        >
+                                          {trendPct}%
+                                        </span>
+                                      </div>
+                                    </td>
+                                  </tr>
+                                );
+                              })
+                            ) : (
+                              <tr>
+                                <td
+                                  colSpan={5}
+                                  style={{
+                                    textAlign: "center",
+                                    color: "#9ca3af",
+                                    padding: 32,
+                                    fontSize: 13,
+                                  }}
+                                >
+                                  Belum ada data
+                                </td>
+                              </tr>
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Word cloud pertanyaan */}
+                  <div
+                    className="chart-card"
+                    style={{ display: "flex", flexDirection: "column" }}
+                  >
+                    <div className="chart-title">Word Cloud Pertanyaan</div>
+                    <div className="chart-sub">
+                      Free-text queries paling populer
+                    </div>
+                    {(() => {
+                      const wordCloudWords = (
+                        sessionIntent?.wordCloud ?? []
+                      ).map((w) => ({ text: w.word, count: w.count }));
+                      return (
+                        <div
+                          className="wc-bg"
+                          style={{ marginTop: 8, flex: 1 }}
+                        >
+                          {loading ? (
+                            <div
+                              style={{
+                                height: 180,
+                                borderRadius: 8,
+                                background:
+                                  "linear-gradient(90deg,#f0f0f0 25%,#e8e8e8 50%,#f0f0f0 75%)",
+                                backgroundSize: "200% 100%",
+                                animation: "shimmer 1.4s infinite",
+                              }}
+                            />
+                          ) : wordCloudWords.length > 0 ? (
+                            <div
+                              style={{
+                                position: "relative",
+                                minHeight: "100%",
+                                borderRadius: 24,
+                                background: "#f3dede",
+                                padding: "24px 16px",
+                                display: "flex",
+                                flexWrap: "wrap",
+                                gap: 10,
+                                alignItems: "center",
+                                justifyContent: "center",
+                              }}
+                            >
+                              <WordCloud words={wordCloudWords} />
+                            </div>
+                          ) : (
+                            <div
+                              style={{
+                                position: "relative",
+                                height: 320,
+                                borderRadius: 24,
+                                background: "#f3dede",
+                                overflow: "hidden",
+                              }}
+                            >
+                              <span
+                                style={{
+                                  position: "absolute",
+                                  top: "48%",
+                                  left: "50%",
+                                  transform: "translate(-50%, -50%)",
+                                  fontSize: 52,
+                                  fontWeight: 800,
+                                  color: "#3b82f6",
+                                  whiteSpace: "nowrap",
+                                }}
+                              >
+                                Pengaduan
+                              </span>
+                              <span
+                                style={{
+                                  position: "absolute",
+                                  top: "22%",
+                                  left: "16%",
+                                  fontSize: 36,
+                                  fontWeight: 500,
+                                  color: "#60a5fa",
+                                  whiteSpace: "nowrap",
+                                }}
+                              >
+                                pinjol
+                              </span>
+                              <span
+                                style={{
+                                  position: "absolute",
+                                  top: "23%",
+                                  left: "50%",
+                                  transform: "translateX(-50%)",
+                                  fontSize: 38,
+                                  fontWeight: 500,
+                                  color: "#047857",
+                                  whiteSpace: "nowrap",
+                                }}
+                              >
+                                SLIK
+                              </span>
+                              <span
+                                style={{
+                                  position: "absolute",
+                                  top: "24%",
+                                  right: "18%",
+                                  fontSize: 26,
+                                  fontWeight: 500,
+                                  color: "#111827",
+                                  whiteSpace: "nowrap",
+                                }}
+                              >
+                                legalitas
+                              </span>
+                              <span
+                                style={{
+                                  position: "absolute",
+                                  bottom: "26%",
+                                  left: "8%",
+                                  fontSize: 34,
+                                  fontWeight: 500,
+                                  color: "#047857",
+                                  whiteSpace: "nowrap",
+                                }}
+                              >
+                                call center
+                              </span>
+                              <span
+                                style={{
+                                  position: "absolute",
+                                  bottom: "26%",
+                                  right: "16%",
+                                  fontSize: 36,
+                                  fontWeight: 500,
+                                  color: "#9ca3af",
+                                  whiteSpace: "nowrap",
+                                }}
+                              >
+                                investasi
+                              </span>
+                              <span
+                                style={{
+                                  position: "absolute",
+                                  bottom: "18%",
+                                  left: "50%",
+                                  transform: "translateX(-50%)",
+                                  fontSize: 28,
+                                  fontWeight: 500,
+                                  color: "#60a5fa",
+                                  whiteSpace: "nowrap",
+                                }}
+                              >
+                                ojk
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
+                  </div>
+                </div>
+              </div>
             )}
           </div>
         </div>
@@ -1362,11 +2154,23 @@ useEffect(() => { fetchAll() }, [fetchAll])
       {/* Mobile bottom nav */}
       <nav className="mobile-nav">
         {[
-          { icon: "grid",  label: "Overview",                    menu: "Overview" },
-          { icon: "chat",  label: "Intent dan Sesi Chat",        menu: "Intent dan Sesi Chat" },
-          { icon: "heart", label: "User Feedback dan CSAT",      menu: "User Feedback dan CSAT" },
-          { icon: "pie",   label: "Performa dan Teknis",         menu: "Performa dan Teknis" },
-          { icon: "doc",   label: "Dokumen",                     menu: "Dokumen" },
+          { icon: "grid", label: "Overview", menu: "Overview" },
+          {
+            icon: "chat",
+            label: "Intent dan Sesi Chat",
+            menu: "Intent dan Sesi Chat",
+          },
+          {
+            icon: "heart",
+            label: "User Feedback dan CSAT",
+            menu: "User Feedback dan CSAT",
+          },
+          {
+            icon: "pie",
+            label: "Performa dan Teknis",
+            menu: "Performa dan Teknis",
+          },
+          { icon: "doc", label: "Dokumen", menu: "Dokumen" },
         ].map((item) => (
           <button
             key={item.icon}
@@ -1374,11 +2178,69 @@ useEffect(() => { fetchAll() }, [fetchAll])
             onClick={() => handleMenuChange(item.menu)}
           >
             <span className="nav-icon">
-            {item.icon === "grid"  && <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>}
-            {item.icon === "chat"  && <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>}
-            {item.icon === "heart" && <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>}
-            {item.icon === "pie"   && <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21.21 15.89A10 10 0 1 1 8 2.83"/><path d="M22 12A10 10 0 0 0 12 2v10z"/></svg>}
-            {item.icon === "doc"   && <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>}
+              {item.icon === "grid" && (
+                <svg
+                  width="20"
+                  height="20"
+                  viewBox="0 0 24 24"
+                  fill="currentColor"
+                >
+                  <rect x="3" y="3" width="7" height="7" rx="1" />
+                  <rect x="14" y="3" width="7" height="7" rx="1" />
+                  <rect x="3" y="14" width="7" height="7" rx="1" />
+                  <rect x="14" y="14" width="7" height="7" rx="1" />
+                </svg>
+              )}
+              {item.icon === "chat" && (
+                <svg
+                  width="20"
+                  height="20"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                >
+                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                </svg>
+              )}
+              {item.icon === "heart" && (
+                <svg
+                  width="20"
+                  height="20"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                >
+                  <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+                </svg>
+              )}
+              {item.icon === "pie" && (
+                <svg
+                  width="20"
+                  height="20"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                >
+                  <path d="M21.21 15.89A10 10 0 1 1 8 2.83" />
+                  <path d="M22 12A10 10 0 0 0 12 2v10z" />
+                </svg>
+              )}
+              {item.icon === "doc" && (
+                <svg
+                  width="20"
+                  height="20"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                >
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                  <polyline points="14 2 14 8 20 8" />
+                </svg>
+              )}
             </span>
             <span>{item.label}</span>
           </button>
@@ -1389,25 +2251,53 @@ useEffect(() => { fetchAll() }, [fetchAll])
         <div
           onClick={() => setShowLogoutConfirm(false)}
           style={{
-            position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)",
-            zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center",
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.4)",
+            zIndex: 9999,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
           }}
         >
           <div
-            onClick={e => e.stopPropagation()}
+            onClick={(e) => e.stopPropagation()}
             style={{
-              background: "#fff", borderRadius: 16, padding: "28px 28px 24px",
-              width: 320, maxWidth: "90vw", boxShadow: "0 8px 40px rgba(0,0,0,0.18)",
+              background: "#fff",
+              borderRadius: 16,
+              padding: "28px 28px 24px",
+              width: 320,
+              maxWidth: "90vw",
+              boxShadow: "0 8px 40px rgba(0,0,0,0.18)",
               textAlign: "center",
             }}
           >
-            <div style={{ fontSize: 17, fontWeight: 700, color: "#8C0000", marginBottom: 12 }}>
+            <div
+              style={{
+                fontSize: 17,
+                fontWeight: 700,
+                color: "#8C0000",
+                marginBottom: 12,
+              }}
+            >
               Keluar
             </div>
-            <div style={{
-              background: "#fef2f2", borderRadius: 10, padding: "14px 16px", marginBottom: 20,
-            }}>
-              <p style={{ fontSize: 13.5, color: "#374151", lineHeight: 1.6, margin: 0 }}>
+            <div
+              style={{
+                background: "#fef2f2",
+                borderRadius: 10,
+                padding: "14px 16px",
+                marginBottom: 20,
+              }}
+            >
+              <p
+                style={{
+                  fontSize: 13.5,
+                  color: "#374151",
+                  lineHeight: 1.6,
+                  margin: 0,
+                }}
+              >
                 Apakah kamu yakin ingin keluar dari dashboard?
               </p>
             </div>
@@ -1415,19 +2305,36 @@ useEffect(() => { fetchAll() }, [fetchAll])
               <button
                 onClick={() => setShowLogoutConfirm(false)}
                 style={{
-                  flex: 1, padding: "10px", background: "#fff", color: "#374151",
-                  border: "1.5px solid #e5e7eb", borderRadius: 8,
-                  fontSize: 13.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
+                  flex: 1,
+                  padding: "10px",
+                  background: "#fff",
+                  color: "#374151",
+                  border: "1.5px solid #e5e7eb",
+                  borderRadius: 8,
+                  fontSize: 13.5,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  fontFamily: "inherit",
                 }}
               >
                 Batal
               </button>
               <button
-                onClick={() => { setShowLogoutConfirm(false); handleLogout() }}
+                onClick={() => {
+                  setShowLogoutConfirm(false);
+                  handleLogout();
+                }}
                 style={{
-                  flex: 1, padding: "10px", background: "#8C0000", color: "#fff",
-                  border: "none", borderRadius: 8,
-                  fontSize: 13.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
+                  flex: 1,
+                  padding: "10px",
+                  background: "#8C0000",
+                  color: "#fff",
+                  border: "none",
+                  borderRadius: 8,
+                  fontSize: 13.5,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  fontFamily: "inherit",
                 }}
               >
                 Keluar
@@ -1437,5 +2344,5 @@ useEffect(() => { fetchAll() }, [fetchAll])
         </div>
       )}
     </>
-  )
+  );
 }

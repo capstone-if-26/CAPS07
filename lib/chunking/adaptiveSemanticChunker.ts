@@ -11,7 +11,7 @@ import { getModuleLogger } from "@/lib/utils/logger";
 const log = getModuleLogger("lib/chunking/adaptiveSemanticChunker");
 
 const HF_MODEL_URL =
-  "https://api-inference.huggingface.co/models/intfloat/multilingual-e5-small";
+  "https://router.huggingface.co/hf-inference/models/intfloat/multilingual-e5-base/pipeline/feature-extraction";
 // HuggingFace Inference API typically handles up to ~64 short texts per request
 const EMBED_BATCH_SIZE = 64;
 
@@ -232,7 +232,9 @@ export class AdaptiveSemanticChunker {
   private parseEmbeddingResponse(data: unknown): number[][] {
     const arr = data as number[][][] | number[][];
     if (!Array.isArray(arr) || arr.length === 0) {
-      throw new Error("Unexpected response shape from HuggingFace Inference API");
+      throw new Error(
+        "Unexpected response shape from HuggingFace Inference API",
+      );
     }
 
     if (Array.isArray(arr[0][0])) {
@@ -392,8 +394,7 @@ export class AdaptiveSemanticChunker {
 
     for (let i = 0; i < chunks.length; i++) {
       if (i > 0)
-        chunks[i].metadata.previous_chunk_id =
-          chunks[i - 1].metadata.chunk_id;
+        chunks[i].metadata.previous_chunk_id = chunks[i - 1].metadata.chunk_id;
       if (i < chunks.length - 1)
         chunks[i].metadata.next_chunk_id = chunks[i + 1].metadata.chunk_id;
     }

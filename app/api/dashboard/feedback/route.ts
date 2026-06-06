@@ -6,6 +6,7 @@ import {
 import { getDashboardFeedback } from "@/modules/dashboard/service";
 import { DashboardOverviewParams } from "@/modules/dashboard/type";
 import { getModuleLogger } from "@/lib/utils/logger";
+import { requireAuth } from "@/lib/utils/auth-guard";
 
 const log = getModuleLogger("api/dashboard/feedback");
 
@@ -17,6 +18,9 @@ export async function GET(req: NextRequest) {
     method: "GET",
     path: "/api/dashboard/feedback",
   });
+
+  const { errorResponse } = await requireAuth(req);
+  if (errorResponse) return errorResponse;
 
   reqLog.debug({}, "dashboard.feedback_requested");
 

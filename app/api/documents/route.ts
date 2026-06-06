@@ -11,6 +11,7 @@ import {
 import type { DocType } from "@/types/chunker";
 import { DocumentUploadError } from "@/modules/documents/error";
 import { getModuleLogger } from "@/lib/utils/logger";
+import { requireAuth } from "@/lib/utils/auth-guard";
 
 const log = getModuleLogger("api/documents");
 
@@ -32,6 +33,9 @@ export async function GET(req: NextRequest) {
     method: "GET",
     path: "/api/documents",
   });
+
+  const { errorResponse } = await requireAuth(req);
+  if (errorResponse) return errorResponse;
 
   reqLog.debug({}, "document.list_requested");
 
@@ -72,6 +76,9 @@ export async function POST(req: NextRequest) {
     method: "POST",
     path: "/api/documents",
   });
+
+  const { errorResponse } = await requireAuth(req);
+  if (errorResponse) return errorResponse;
 
   reqLog.debug({}, "document.upload_start");
 

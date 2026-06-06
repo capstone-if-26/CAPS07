@@ -3,6 +3,7 @@ import { buildFailedResponse, buildSuccessResponse } from "@/lib/utils/response"
 import { getDocumentById, deleteDocument, updateDocumentStatus } from "@/modules/documents/service";
 import { DocumentOperationError } from "@/modules/documents/error";
 import { getModuleLogger } from "@/lib/utils/logger";
+import { requireAuth } from "@/lib/utils/auth-guard";
 
 const log = getModuleLogger("api/documents/[id]");
 
@@ -15,6 +16,9 @@ export async function GET(req: NextRequest, context: RouteContext) {
   const requestId = req.headers.get("x-request-id") ?? "unknown";
   const { id } = await context.params;
   const reqLog = log.child({ request_id: requestId, method: "GET", path: `/api/documents/${id}`, documentId: id });
+
+  const { errorResponse } = await requireAuth(req);
+  if (errorResponse) return errorResponse;
 
   reqLog.debug({}, "document.fetch_requested");
 
@@ -44,6 +48,9 @@ export async function DELETE(req: NextRequest, context: RouteContext) {
   const requestId = req.headers.get("x-request-id") ?? "unknown";
   const { id } = await context.params;
   const reqLog = log.child({ request_id: requestId, method: "DELETE", path: `/api/documents/${id}`, documentId: id });
+
+  const { errorResponse } = await requireAuth(req);
+  if (errorResponse) return errorResponse;
 
   reqLog.info({}, "document.delete_requested");
 
@@ -78,6 +85,9 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
   const requestId = req.headers.get("x-request-id") ?? "unknown";
   const { id } = await context.params;
   const reqLog = log.child({ request_id: requestId, method: "PATCH", path: `/api/documents/${id}`, documentId: id });
+
+  const { errorResponse } = await requireAuth(req);
+  if (errorResponse) return errorResponse;
 
   reqLog.debug({}, "document.status_update_requested");
 
