@@ -5,7 +5,13 @@ const ALLOWED_ORIGIN = process.env.NEXT_PUBLIC_APP_URL || "*";
 
 const SKIP_PATHS = ["/_next/static", "/_next/image", "/favicon.ico"];
 
-const SESSION_COOKIE_NAME = "better-auth.session_token";
+const SESSION_COOKIE_SUFFIX = "better-auth.session_token";
+
+function hasSessionCookie(request: NextRequest): boolean {
+  return request.cookies
+    .getAll()
+    .some((c) => c.name.endsWith(SESSION_COOKIE_SUFFIX) && Boolean(c.value));
+}
 
 const PROTECTED_ADMIN_PATHS = ["/admin/dashboard"];
 
@@ -13,10 +19,8 @@ export function middleware(request: NextRequest) {
   const { method, nextUrl } = request;
   const path = nextUrl.pathname;
 
-  // Protect admin page routes — redirect to login if session cookie is absent
   if (PROTECTED_ADMIN_PATHS.some((p) => path.startsWith(p))) {
-    const sessionCookie = request.cookies.get(SESSION_COOKIE_NAME);
-    if (!sessionCookie) {
+    if (!hasSessionCookie(request)) {
       const loginUrl = new URL("/admin/login", request.url);
       loginUrl.searchParams.set("redirect", path);
       return NextResponse.redirect(loginUrl);
@@ -44,11 +48,9 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  const requestId =
-    request.headers.get("x-request-id") ?? crypto.randomUUID();
+  const requestId = request.headers.get("x-request-id") ?? crypto.randomUUID();
   const requestStart = Date.now();
 
-  // Forward request_id downstream so API route handlers can pick it up
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set("x-request-id", requestId);
   requestHeaders.set("x-request-start", String(requestStart));
@@ -57,7 +59,6 @@ export function middleware(request: NextRequest) {
     request: { headers: requestHeaders },
   });
 
-  // Only set CORS headers for API routes
   if (path.startsWith("/api/")) {
     response.headers.set("Access-Control-Allow-Origin", origin);
     response.headers.set(
@@ -73,7 +74,6 @@ export function middleware(request: NextRequest) {
 
   response.headers.set("x-request-id", requestId);
 
-  // Structured log — console is the only safe I/O in Edge Runtime
   console.log(
     JSON.stringify({
       level: "info",

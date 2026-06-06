@@ -59,7 +59,7 @@ export default function AdminLoginPage() {
         return;
       }
 
-      router.push("/admin/dashboard");
+      window.location.href = "/admin/dashboard";
     } catch {
       setErrorType("general");
       setError(
