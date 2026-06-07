@@ -606,6 +606,7 @@ export default function ChatbotWidget({ onClose }: ChatbotWidgetProps) {
             if (idx >= 0 && updated[idx]) {
               updated[idx] = {
                 ...updated[idx],
+                text: "",
                 flow: {
                   step: {
                     id: question.id,

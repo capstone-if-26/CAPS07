@@ -59,9 +59,39 @@ export const markdownComponents: Components = {
     </ol>
   ),
 
+  // Code block wrapper
+  pre: ({ children }: any) => (
+    <pre
+      style={{
+        overflowX: "auto",
+        maxWidth: "100%",
+        background: "rgba(0,0,0,0.06)",
+        borderRadius: 4,
+        padding: "6px 8px",
+        fontSize: "9.5px",
+        lineHeight: 1.5,
+        whiteSpace: "pre-wrap",
+        wordBreak: "break-all",
+        margin: "4px 0",
+      }}
+    >
+      {children}
+    </pre>
+  ),
+
   // Inline code
   code: ({ children }: any) => (
-    <code className="bg-black/10 rounded px-1 py-0.5 font-mono text-[10px]">
+    <code
+      style={{
+        background: "rgba(0,0,0,0.06)",
+        borderRadius: 3,
+        padding: "1px 4px",
+        fontSize: "9.5px",
+        fontFamily: "monospace",
+        wordBreak: "break-all",
+        whiteSpace: "pre-wrap",
+      }}
+    >
       {children}
     </code>
   ),

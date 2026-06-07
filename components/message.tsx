@@ -169,7 +169,7 @@ export default function Message({ msg, index, onFlowOption }: MessageProps) {
               : "bg-[#a11212] text-white self-end border border-[#a11212]"
           }`}
         >
-          {msg.text &&
+          {msg.text && !msg.flow?.step &&
             (isBot ? (
               <div className="break-words font-normal leading-snug prose-none">
                 <ReactMarkdown
