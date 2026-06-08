@@ -1,0 +1,6 @@
+export const DEFAULT_BATCH_SIZE = 64;
+export const MAXIMAL_BATCH_SIZE = 64;
+
+export const DEFAULT_TOP_K_NAMESPACE = 6;
+export const DEFAULT__GLOBAL_TOP_K_NAMESPACE = 6;
+export const DEFAULT_THRESHOLD_SCORE_QUERY = 0.2;

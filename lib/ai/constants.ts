@@ -1,20 +1,18 @@
-// Routing constants
-export const ROUTING_MODEL_PRIMARY = process.env.ROUTING_MODEL_PRIMARY;
-export const ROUTING_MODEL_FALLBACK = process.env.ROUTING_MODEL_FALLBACK;
-export const ROUTING_MODEL_FAST = process.env.ROUTING_MODEL_FAST;
-export const ROUTING_MODEL_BACKUP = process.env.ROUTING_MODEL_BACKUP;
-export const ROUTING_MAX_RETRIES = parseInt(
-  process.env.ROUTING_MAX_RETRIES || "2",
-  10,
-);
+// AI Model constants
+export const DEFAULT_TOP_K = 5;
+export const DEFAULT_TEMPERATURE = 0.1;
+export const DEFAULT_TOP_P = 0.9;
+export const DEFAULT_FREQUENCY_PENALTY = 0;
+export const DEFAULT_PRESENCE_PENALTY = 0;
 
-export const ROUTING_TEMPERATURE = process.env.ROUTING_TEMPERATURE;
-export const ROUTING_TOP_P = process.env.ROUTING_TOP_P;
-export const ROUTING_TOP_K = process.env.ROUTING_TOP_K;
-export const ROUTING_SEED = process.env.ROUTING_SEED;
-export const ROUTING_RESPONSE_CONFIDENCE_THRESHOLD = parseFloat(
-  process.env.ROUTING_RESPONSE_CONFIDENCE_THRESHOLD || "0.7",
-);
+export const CHAT_TEMPERATURE = 0.5;
+export const CHAT_TOP_P = 0.9;
+export const CHAT_FREQUENCY_PENALTY = 0.3;
+export const CHAT_PRESENCE_PENALTY = 0.2;
+
+export const DEFAULT_MAX_TRIES = 2;
+
+// Routing constants
 
 export const RETRIEVE_POLICY_CONTEXT_DESCRIPTION = `
 IMPORTANT:
@@ -39,3 +37,19 @@ Always ground answers using retrieved context.
 export const ASK_USER_QUESTION_TOOL_DESCRIPTION = `
 Ask the user a follow-up question with radio options. ALWAYS use this tool instead of normal text for clarification questions that include selectable answers/options.
 `;
+
+// Intent constants
+export const INTENT_CONTEXT_TURNS = 4;
+
+export const OJK_INTENTS = [
+  "Cek Legalitas Pinjol/Investasi",
+  "Lapor Penipuan (OJK / IASC)",
+  "Kenali Modus Penipuan",
+  "Cek SLIK / Riwayat Kredit",
+  "IASC — Anti-Scam Centre",
+  "Panduan Produk Bank",
+  "Hak Saya sebagai Konsumen",
+  "Panduan Investasi & Kripto Aman",
+  "Literasi & Tips Keuangan",
+  "Lainnya",
+] as const;

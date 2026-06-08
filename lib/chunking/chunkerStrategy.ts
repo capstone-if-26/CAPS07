@@ -4,6 +4,9 @@ import { ChunkerConfig, ChunkData } from "@/types/chunker";
 import { LegalRegexChunker } from "./legalRegexChunker";
 import { FAQRegexChunker } from "./faqRegexChunker";
 import { AdaptiveSemanticChunker } from "./adaptiveSemanticChunker";
+import { getModuleLogger } from "@/lib/utils/logger";
+
+const log = getModuleLogger("lib/chunking/chunkerStrategy");
 
 /**
  * Konfigurasi strategi chunker per documentType.
@@ -77,6 +80,8 @@ export async function executeChunkerPipeline(
   config: ChunkerConfig,
 ): Promise<ChunkData[]> {
   const strategy = getStrategy(documentType);
+  log.info({ documentType, fileName: config.fileName, processMode: strategy.processMode }, "chunking.pipeline_started");
+
   const chunker = strategy.createChunker(config);
 
   if (strategy.processMode === "semantic") {
@@ -94,10 +99,14 @@ export async function executeChunkerPipeline(
 
     // Untuk semantic chunker, sourceInput berupa teks mentah
     const textContent = fileBuffer.toString("utf-8");
-    return await semanticChunker.chunkText(textContent);
+    const chunks = await semanticChunker.chunkText(textContent);
+    log.info({ documentType, fileName: config.fileName, chunkCount: chunks.length }, "chunking.pipeline_completed");
+    return chunks;
   }
 
   // Standard chunkers (Legal, FAQ) — gunakan process()
   const standardChunker = chunker as LegalRegexChunker | FAQRegexChunker;
-  return await standardChunker.process();
+  const chunks = await standardChunker.process();
+  log.info({ documentType, fileName: config.fileName, chunkCount: chunks.length }, "chunking.pipeline_completed");
+  return chunks;
 }

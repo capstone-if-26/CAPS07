@@ -16,11 +16,15 @@ import { ChunkerConfig } from "@/types/chunker";
 import * as crypto from "crypto";
 import { UploadDocumentInput, UploadDocumentResult } from "./types";
 import { DocumentUploadError, DocumentOperationError } from "./error";
+import { getModuleLogger } from "@/lib/utils/logger";
+import { DEFAULT_PAGE_LIMIT, DEFAULT_PAGE_SIZE } from "./constant";
+
+const log = getModuleLogger("modules/documents/service");
 
 export async function fetchAllAvailableDocuments(
   search: string = "",
-  page: number = 1,
-  limit: number = 10,
+  page: number = DEFAULT_PAGE_SIZE,
+  limit: number = DEFAULT_PAGE_LIMIT,
 ) {
   try {
     const offset = (page - 1) * limit;
@@ -36,7 +40,7 @@ export async function fetchAllAvailableDocuments(
       },
     };
   } catch (error) {
-    console.error("Gagal mengambil semua dokumen:", error);
+    log.error({ err: error }, "document.list_fetch_failed");
     throw error;
   }
 }
@@ -46,13 +50,12 @@ export async function getDocumentById(id: string) {
     const document = await getDocument(id);
     return document;
   } catch (error) {
-    console.error(`Gagal mengambil dokumen dengan ID '${id}':`, error);
+    log.error({ err: error, documentId: id }, "document.fetch_by_id_failed");
     throw error;
   }
 }
 
 export async function deleteDocument(id: string) {
-  // 1. Ambil dokumen untuk mendapatkan namespace dan data backup
   const doc = await getDocument(id);
   if (!doc) {
     throw new DocumentOperationError(
@@ -61,7 +64,6 @@ export async function deleteDocument(id: string) {
     );
   }
 
-  // 2. Hapus record dari database
   try {
     await deleteDocumentRecord(id);
   } catch (error) {
@@ -73,14 +75,14 @@ export async function deleteDocument(id: string) {
     );
   }
 
-  // 3. Hapus namespace dari Pinecone
   try {
     await deletePineconeNamespace(doc.namespace);
   } catch (error) {
-    // Compensating transaction: re-insert record ke database
-    console.error(
-      `Pinecone delete gagal. Melakukan rollback: re-insert database record (${id})...`,
+    log.error(
+      { err: error, documentId: id },
+      "document.pinecone_delete_failed",
     );
+    log.warn({ documentId: id }, "document.rollback_attempted");
     try {
       await createDocumentRecord({
         name: doc.name,
@@ -92,11 +94,11 @@ export async function deleteDocument(id: string) {
         version: doc.version,
         effectiveDate: doc.effectiveDate,
       });
-      console.log("Rollback database (re-insert) berhasil.");
+      log.info({ documentId: id }, "document.rollback_succeeded");
     } catch (rollbackError) {
-      console.error(
-        "CRITICAL: Rollback database juga gagal! Data inkonsisten mungkin terjadi.",
-        rollbackError,
+      log.error(
+        { err: rollbackError, documentId: id },
+        "document.rollback_failed",
       );
     }
 
@@ -112,9 +114,8 @@ export async function deleteDocument(id: string) {
 }
 
 /**
- * Phase 1 (Synchronous): Validasi input, simpan record ke DB dengan status "processing".
- * Dipanggil di route handler SEBELUM response dikirim.
- * Return cepat agar client tidak timeout.
+ * Phase 1 (Synchronous): Validates input and inserts a DB record with status "processing".
+ * Returns immediately so the client does not timeout.
  */
 export async function initiateDocumentUpload(
   input: UploadDocumentInput,
@@ -131,7 +132,6 @@ export async function initiateDocumentUpload(
     statusDocument,
   } = input;
 
-  // 1. Validasi format file berdasarkan documentType
   const validation = validateFileExtension(documentType, fileName);
   if (!validation.valid) {
     throw new DocumentUploadError(
@@ -141,13 +141,9 @@ export async function initiateDocumentUpload(
     );
   }
 
-  // 2. Hitung file hash
   const fileHash = crypto.createHash("sha256").update(file).digest("hex");
-
-  // 3. Parse effectiveDate jika ada
   const parsedEffectiveDate = effectiveDate ? new Date(effectiveDate) : null;
 
-  // 4. Insert record ke database dengan status "processing"
   let documentRecord;
   try {
     documentRecord = await createDocumentRecord({
@@ -169,7 +165,6 @@ export async function initiateDocumentUpload(
     );
   }
 
-  // 5. Return immediately — processing belum dimulai
   return {
     documentId: documentRecord.id,
     documentType,
@@ -186,8 +181,7 @@ export async function initiateDocumentUpload(
 
 /**
  * Phase 2 (Asynchronous): Chunking + Pinecone upsert.
- * Dipanggil via `after()` SETELAH response dikirim ke client.
- * Update status di DB saat selesai atau gagal.
+ * Called via `after()` after the response is sent to the client.
  */
 export async function processDocumentInBackground(
   documentId: string,
@@ -206,8 +200,12 @@ export async function processDocumentInBackground(
     processingStatus,
   } = input;
 
+  log.info(
+    { documentId, documentType, fileName },
+    "document.background_processing_started",
+  );
+
   try {
-    // 1. Siapkan konfigurasi chunker
     const chunkerConfig: ChunkerConfig = {
       sourceInput: file,
       fileName,
@@ -220,7 +218,6 @@ export async function processDocumentInBackground(
       processingStatus,
     };
 
-    // 2. Jalankan chunking pipeline
     const chunks = await executeChunkerPipeline(
       documentType,
       file,
@@ -228,6 +225,7 @@ export async function processDocumentInBackground(
     );
 
     if (chunks.length === 0) {
+      log.warn({ documentId }, "document.background_empty_chunks");
       await updateDocumentProcessingStatus(
         documentId,
         "failed",
@@ -236,42 +234,36 @@ export async function processDocumentInBackground(
       return;
     }
 
-    // 3. Upsert ke Pinecone
     await upsertChunksPipeline(chunks, namespaceName);
-
-    // 4. Update status ke "completed" dan totalChunks
     await updateDocumentTotalChunks(documentId, chunks.length);
     await updateDocumentProcessingStatus(documentId, "completed");
 
-    console.log(
-      `[Background] Dokumen ${documentId} berhasil diproses: ${chunks.length} chunks.`,
+    log.info(
+      { documentId, chunkCount: chunks.length },
+      "document.background_completed",
     );
   } catch (error) {
-    // Update status ke "failed" dengan error message
     const errorMessage =
       error instanceof Error ? error.message : "Unknown processing error";
 
-    console.error(`[Background] Gagal memproses dokumen ${documentId}:`, error);
+    log.error({ err: error, documentId }, "document.background_failed");
 
     try {
       await updateDocumentProcessingStatus(documentId, "failed", errorMessage);
     } catch (updateError) {
-      console.error(
-        `[Background] CRITICAL: Gagal update status dokumen ${documentId}:`,
-        updateError,
+      log.error(
+        { err: updateError, documentId },
+        "document.background_status_update_failed",
       );
     }
 
-    // Compensating transaction: hapus DB record jika Pinecone belum ada data
     try {
       await deleteDocumentRecord(documentId);
-      console.log(
-        `[Background] Rollback: record ${documentId} dihapus dari database.`,
-      );
+      log.info({ documentId }, "document.background_rollback_succeeded");
     } catch (rollbackError) {
-      console.error(
-        `[Background] CRITICAL: Rollback gagal untuk ${documentId}:`,
-        rollbackError,
+      log.error(
+        { err: rollbackError, documentId },
+        "document.background_rollback_failed",
       );
     }
   }
@@ -289,7 +281,7 @@ export async function updateDocumentStatus(id: string, documentStatus: string) {
 
     await updateDocumentStatusRepository(id, documentStatus);
   } catch (error) {
-    console.error(`Gagal mengubah status dokumen dengan ID '${id}':`, error);
+    log.error({ err: error, documentId: id }, "document.status_update_failed");
     throw error;
   }
 }

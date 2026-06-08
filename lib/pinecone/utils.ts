@@ -7,19 +7,23 @@ import {
   ScoredPineconeRecord,
 } from "@pinecone-database/pinecone";
 import { pineconeIndex } from ".";
-
-// Mengimpor tipe dari implementasi chunker sebelumnya
 import { ChunkData, ChunkMetadata } from "@/types/chunker";
+import { getModuleLogger } from "@/lib/utils/logger";
+import {
+  DEFAULT__GLOBAL_TOP_K_NAMESPACE,
+  DEFAULT_BATCH_SIZE,
+  DEFAULT_THRESHOLD_SCORE_QUERY,
+  DEFAULT_TOP_K_NAMESPACE,
+  MAXIMAL_BATCH_SIZE,
+} from "./type";
 
-/**
- * Filter dan transformasi metadata untuk diindeks oleh Pinecone.
- * Sesuai arsitektur Python, memindahkan page_content ke dalam metadata.text.
- */
+const log = getModuleLogger("lib/pinecone/utils");
+
 function extractPineconeMetadata(chunk: ChunkData): RecordMetadata {
   const metaSource = chunk.metadata;
   const targetMeta: RecordMetadata = {};
 
-  // Pinecone hanya menerima string, number, boolean, atau array of string dalam metadata
+  // Metadata wajib
   const keysToExtract: (keyof ChunkMetadata)[] = [
     "document_name",
     "chunk_id",
@@ -35,7 +39,6 @@ function extractPineconeMetadata(chunk: ChunkData): RecordMetadata {
     }
   }
 
-  // Payload injeksi krusial untuk fase Retrieval
   targetMeta["text"] = chunk.page_content;
 
   return targetMeta;
@@ -47,19 +50,24 @@ function extractPineconeMetadata(chunk: ChunkData): RecordMetadata {
 export async function upsertChunksPipeline(
   chunks: ChunkData[],
   namespaceId: string,
-  batchSize: number = 24, 
+  batchSize: number = DEFAULT_BATCH_SIZE,
 ): Promise<void> {
   if (chunks.length === 0) return;
 
-  // 1. Batasi ukuran batch maksimal 64 untuk mematuhi regulasi Inference API
-  const safeBatchSize = Math.min(batchSize, 64);
-  console.log(
-    `Memulai proses pipeline cloud untuk ${chunks.length} chunks (Batch: ${safeBatchSize})...`,
+  // 1. Batasi ukuran batch untuk mematuhi regulasi Inference API
+  const safeBatchSize = Math.min(batchSize, MAXIMAL_BATCH_SIZE);
+  log.info(
+    {
+      chunkCount: chunks.length,
+      batchSize: safeBatchSize,
+      namespace: namespaceId,
+    },
+    "pinecone.upsert_started",
   );
 
   const pineconeNs = getPineconeNamespace(namespaceId);
 
-  // 2. Loop Utama: Siklus komputasi dan unggahan sekarang disatukan per batch
+  // 2. Siklus komputasi dan unggahan sekarang disatukan per batch
   for (let start = 0; start < chunks.length; start += safeBatchSize) {
     const batchChunks = chunks.slice(start, start + safeBatchSize);
 
@@ -82,7 +90,7 @@ export async function upsertChunksPipeline(
         });
       });
 
-      // 4. Perakitan Payload Pinecone
+      // 4.  Payload Pinecone
       const records: PineconeRecord[] = [];
       const vectorsData = embeddingResponse.data;
 
@@ -102,14 +110,22 @@ export async function upsertChunksPipeline(
         await pineconeNs.upsert({ records });
       });
 
-      console.log(
-        `  -> Berhasil mengunggah batch indeks ${start} hingga ${start + records.length - 1}`,
+      log.debug(
+        {
+          batchStart: start,
+          batchEnd: start + records.length - 1,
+          namespace: namespaceId,
+        },
+        "pinecone.batch_upserted",
       );
     } catch (error) {
-      // Graceful degradation: Tangkap error agar tidak mematikan keseluruhan loop
-      console.error(
-        `[FATAL] Gagal memproses batch indeks ${start} setelah maksimum percobaan:`,
-        error,
+      log.error(
+        { err: error, batchStart: start, namespace: namespaceId },
+        "pinecone.batch_upsert_failed",
+      );
+
+      throw new Error(
+        "Gagal memproses batch indeks" + start + "setelah maksimum percobaan",
       );
 
       throw new Error("Gagal memproses batch indeks" + start + "setelah maksimum percobaan");
@@ -123,10 +139,9 @@ export async function upsertChunksPipeline(
 export async function deletePineconeNamespace(namespace: string) {
   try {
     await pineconeIndex.deleteNamespace(namespace);
-
-    console.log(`Namespace '${namespace}' berhasil dihapus.`);
+    log.info({ namespace }, "pinecone.namespace_deleted");
   } catch (error) {
-    console.error(`Gagal menghapus namespace '${namespace}':`, error);
+    log.error({ err: error, namespace }, "pinecone.namespace_delete_failed");
     throw error;
   }
 }
@@ -134,12 +149,15 @@ export async function deletePineconeNamespace(namespace: string) {
 export async function retrieveRelevantChunks(
   question: string,
   namespaces: string[],
-  namespaceTopK: number = 6,
+  namespaceTopK: number = DEFAULT_TOP_K_NAMESPACE,
   metadataFilter?: Record<string, unknown>,
-  globalTopK: number = 30,
-  minScoreThreshold: number = 0.2,
+  globalTopK: number = DEFAULT__GLOBAL_TOP_K_NAMESPACE,
+  minScoreThreshold: number = DEFAULT_THRESHOLD_SCORE_QUERY,
 ): Promise<ScoredPineconeRecord<RecordMetadata>[]> {
-  console.log(`Mengonversi pertanyaan ke dalam vektor (Cloud Inference)...`);
+  log.debug(
+    { namespaceCount: namespaces.length, topK: namespaceTopK },
+    "pinecone.query_embedding_started",
+  );
 
   let queryVector: number[];
 
@@ -156,19 +174,58 @@ export async function retrieveRelevantChunks(
     queryVector = (queryEmbeddingResponse.data[0] as { values: number[] })
       .values;
   } catch (error) {
-    console.error("Gagal melakukan embedding pada query pencarian:", error);
+    log.error({ err: error }, "pinecone.query_embedding_failed");
     throw error;
   }
 
   const promises = namespaces.map(async (ns) => {
-    const pineconeNs = getPineconeNamespace(ns);
-    const response = await pineconeNs.query({
-      vector: queryVector,
-      topK: namespaceTopK,
-      includeMetadata: true,
-      filter: metadataFilter,
-    });
-    return response.matches;
+    const queryStart = performance.now();
+
+    try {
+      const pineconeNs = getPineconeNamespace(ns);
+
+      log.debug(
+        {
+          namespace: ns,
+          topK: namespaceTopK,
+          filter: metadataFilter,
+        },
+        "pinecone.namespace_query_started",
+      );
+
+      const response = await pineconeNs.query({
+        vector: queryVector,
+        topK: namespaceTopK,
+        includeMetadata: true,
+        filter: metadataFilter,
+      });
+
+      log.info(
+        {
+          namespace: ns,
+          latencyMs: performance.now() - queryStart,
+          matchCount: response.matches?.length || 0,
+          topScore: response.matches?.[0]?.score,
+        },
+        "pinecone.namespace_query_completed",
+      );
+
+      return response.matches;
+    } catch (error: any) {
+      log.error(
+        {
+          namespace: ns,
+          err: error,
+          message: error?.message,
+          cause: error?.cause,
+          stack: error?.stack,
+          status: error?.status,
+        },
+        "pinecone.namespace_query_failed",
+      );
+
+      return [];
+    }
   });
 
   const results = await Promise.all(promises);
@@ -178,7 +235,6 @@ export async function retrieveRelevantChunks(
     allMatches = allMatches.concat(matchArray);
   }
 
-  // Deduplikasi
   const uniqueMatches = Array.from(
     new Map(allMatches.map((item) => [item.id, item])).values(),
   );
@@ -191,8 +247,14 @@ export async function retrieveRelevantChunks(
   // Urutkan berdasarkan bobot semantik tertinggi
   relevantMatches.sort((a, b) => (b.score || 0) - (a.score || 0));
 
-  console.log(
-    `Ditemukan ${relevantMatches.length} kecocokan relevan. Skor teratas: ${relevantMatches[0].score}`,
+  const topScore = relevantMatches[0]?.score ?? 0;
+  log.info(
+    {
+      matchCount: relevantMatches.length,
+      topScore,
+      namespaceCount: namespaces.length,
+    },
+    "pinecone.retrieval_completed",
   );
 
   return relevantMatches.slice(0, globalTopK);

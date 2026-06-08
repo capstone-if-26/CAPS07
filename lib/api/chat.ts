@@ -61,7 +61,7 @@ export interface IntentSummaryResponse {
   };
 }
 
-/** Client-side transcript for summary; includes messages that may not be persisted yet. */
+/** Intent dan Rangkuman */
 export type IntentSummaryMessageSnapshot = {
   role: "user" | "assistant";
   content: string;
@@ -322,18 +322,18 @@ export async function continueChat(
 }
 
 // Feedback untuk pesan bot
-export type FeedbackValue = "like" | "dislike" | "none"
+export type FeedbackValue = "like" | "dislike" | "none";
 
 export async function submitFeedback(
   messageId: string,
-  feedback: FeedbackValue
+  feedback: FeedbackValue,
 ): Promise<void> {
   const res = await fetch(`${BASE_URL}/api/messages/${messageId}/feedback`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ feedback }),
-  })
+  });
   if (!res.ok) {
-    throw new Error(`Gagal submit feedback: ${res.status}`)
+    throw new Error(`Gagal submit feedback: ${res.status}`);
   }
 }

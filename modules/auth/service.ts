@@ -8,35 +8,42 @@ import { generateAuthEmailHTML } from "./constants";
 const getResend = () => new Resend(process.env.RESEND_API_KEY);
 
 export const auth = betterAuth({
-    database: drizzleAdapter(db, {
-        provider: "pg",
-        schema: {
-            user: schema.users,
-            session: schema.sessions,
-            account: schema.accounts,
-            verification: schema.verifications,
-        }
-    }),
-    baseURL: process.env.NEXT_PUBLIC_APP_URL,
-    emailAndPassword: {
-        enabled: true,
-        sendResetPassword: async ({ user, url, token }, request) => {
-            await getResend().emails.send({
-                from: "ojkchatbot@gmail.com",
-                to: user.email,
-                subject: "Instruksi Reset Password",
-                html: generateAuthEmailHTML('RESET_PASSWORD', url, user.email),
-            });
-        },
+  database: drizzleAdapter(db, {
+    provider: "pg",
+    schema: {
+      user: schema.users,
+      session: schema.sessions,
+      account: schema.accounts,
+      verification: schema.verifications,
     },
-    emailVerification: {
-        sendVerificationEmail: async ({ user, url, token }, request) => {
-            await getResend().emails.send({
-                from: "ojkchatbot@gmail.com",
-                to: user.email,
-                subject: "Verifikasi Alamat Email",
-                html: generateAuthEmailHTML('VERIFY_EMAIL', url, user.email),
-            });
-        },
+  }),
+  baseURL: process.env.NEXT_PUBLIC_APP_URL,
+  emailAndPassword: {
+    enabled: true,
+    sendResetPassword: async ({ user, url, token }, request) => {
+      await getResend().emails.send({
+        from: "onboarding@resend.dev",
+        to: user.email,
+        subject: "Instruksi Reset Password",
+        html: generateAuthEmailHTML("RESET_PASSWORD", url, user.email),
+      });
     },
+  },
+  emailVerification: {
+    sendVerificationEmail: async ({ user, url, token }, request) => {
+      const verifyUrl = new URL(url);
+      verifyUrl.searchParams.set("callbackURL", "/admin/dashboard");
+
+      await getResend().emails.send({
+        from: "onboarding@resend.dev",
+        to: user.email,
+        subject: "Verifikasi Alamat Email",
+        html: generateAuthEmailHTML(
+          "VERIFY_EMAIL",
+          verifyUrl.toString(),
+          user.email,
+        ),
+      });
+    },
+  },
 });

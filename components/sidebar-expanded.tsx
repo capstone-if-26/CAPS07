@@ -37,7 +37,7 @@ export default function SidebarExpanded({
     return () => document.removeEventListener("mousedown", fn)
   }, [open, onClose])
 
-  // Close on Escape
+  // Close on escape
   useEffect(() => {
     const fn = (e: KeyboardEvent) => { if (e.key === "Escape") onClose() }
     document.addEventListener("keydown", fn)
@@ -47,20 +47,6 @@ export default function SidebarExpanded({
   return (
     <>
       <style>{`
-        .sidebar-overlay {
-          position: fixed;
-          inset: 0;
-          background: rgba(0,0,0,0.25);
-          z-index: 150;
-          opacity: 0;
-          pointer-events: none;
-          transition: opacity 0.2s ease;
-        }
-        .sidebar-overlay.open {
-          opacity: 1;
-          pointer-events: auto;
-        }
-
         .sidebar-drawer {
           position: fixed;
           top: 0;
@@ -74,6 +60,8 @@ export default function SidebarExpanded({
           transform: translateX(-100%);
           transition: transform 0.22s cubic-bezier(0.4,0,0.2,1);
           box-shadow: 4px 0 24px rgba(0,0,0,0.10);
+          will-change: transform;
+          backface-visibility: hidden;
         }
         .sidebar-drawer.open {
           transform: translateX(0);
@@ -171,13 +159,6 @@ export default function SidebarExpanded({
         .sdraw-bottom-item.danger:hover { background: #fef2f2; color: #8C0000; }
       `}</style>
 
-      {/* Overlay */}
-      <div
-        className={`sidebar-overlay${open ? " open" : ""}`}
-        onClick={onClose}
-        style={{ background: "transparent" }}
-      />
-
       {/* Drawer */}
       <div ref={sidebarRef} className={`sidebar-drawer${open ? " open" : ""}`}>
         {/* Logo + close button */}
@@ -208,7 +189,7 @@ export default function SidebarExpanded({
 
         {/* Bottom: Pengaturan + Logout */}
         <div className="sdraw-bottom">
-          <button className="sdraw-bottom-item">
+          <button className="sdraw-bottom-item" onClick={() => { onMenuClick?.("Pengaturan"); onClose() }}>
             <Image src="/settings.png" alt="settings" width={18} height={18} />
             Pengaturan
           </button>

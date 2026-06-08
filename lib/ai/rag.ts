@@ -1,8 +1,11 @@
 import { generateText, stepCountIs, streamText, tool } from "ai";
 import { model } from "@/lib/openrouter";
 import { retrieveRelevantChunks } from "@/lib/pinecone/utils";
-import { stripSummaryMarkdownArtifacts } from "@/lib/format-plain-summary";
+import { stripSummaryMarkdownArtifacts } from "@/lib/utils/format-plain-summary";
 import { z } from "zod";
+import { getModuleLogger } from "@/lib/utils/logger";
+
+const log = getModuleLogger("lib/ai/rag");
 
 import type {
   AgenticQuestion,
@@ -30,7 +33,19 @@ import {
   getCreateQuizPrompt,
   getGenerateConversationSummaryPrompt,
 } from "./prompts";
-import { ASK_USER_QUESTION_TOOL_DESCRIPTION, RETRIEVE_POLICY_CONTEXT_DESCRIPTION } from "./constants";
+import {
+  ASK_USER_QUESTION_TOOL_DESCRIPTION,
+  CHAT_FREQUENCY_PENALTY,
+  CHAT_PRESENCE_PENALTY,
+  CHAT_TEMPERATURE,
+  CHAT_TOP_P,
+  DEFAULT_FREQUENCY_PENALTY,
+  DEFAULT_PRESENCE_PENALTY,
+  DEFAULT_TEMPERATURE,
+  DEFAULT_TOP_K,
+  DEFAULT_TOP_P,
+  RETRIEVE_POLICY_CONTEXT_DESCRIPTION,
+} from "./constants";
 
 export type {
   AgenticRagStreamEvent,
@@ -51,10 +66,10 @@ export function createAgenticRagStream(params: AgenticRagStreamParams) {
   const fallbackNamespaces = normalizeNamespaces([
     ...params.defaultNamespaces,
     ...availableNamespaces,
-    process.env.PINECONE_NAMESPACE || "pojk-22-2023-perlindungan-konsumen",
+    process.env.PINECONE_NAMESPACE || "",
   ]);
   const namespaceSet = new Set(availableNamespaces);
-  const topK = params.topK ?? 6;
+  const topK = params.topK ?? DEFAULT_TOP_K;
   const shortTermMemoryStr = buildShortTermMemoryString(params.shortTermMemory);
   const docsCatalog = buildDocsCatalog(params.availableDocuments);
   const retrievedMatches: RetrievedMatch[] = [];
@@ -75,10 +90,10 @@ export function createAgenticRagStream(params: AgenticRagStreamParams) {
     model,
     system: systemPrompt,
     prompt: userPrompt,
-    temperature: 0.5,
-    topP: 0.9,
-    frequencyPenalty: 0.3,
-    presencePenalty: 0.2,
+    temperature: CHAT_TEMPERATURE,
+    topP: CHAT_TOP_P,
+    frequencyPenalty: CHAT_FREQUENCY_PENALTY,
+    presencePenalty: CHAT_PRESENCE_PENALTY,
     stopWhen: forceQuestionTool ? stepCountIs(1) : stepCountIs(4),
     toolChoice: forceQuestionTool
       ? { type: "tool", toolName: "ask_user_question" }
@@ -98,12 +113,15 @@ export function createAgenticRagStream(params: AgenticRagStreamParams) {
           const namespacesToUse =
             validNamespaces.length > 0 ? validNamespaces : fallbackNamespaces;
 
-          console.log("[AgenticRAG][ToolCall] retrieve_policy_context", {
-            query,
-            namespacesRequested: namespaces || [],
-            namespacesUsed: namespacesToUse,
-            topK: requestedTopK || topK,
-          });
+          log.debug(
+            {
+              query,
+              namespacesRequested: namespaces || [],
+              namespacesUsed: namespacesToUse,
+              topK: requestedTopK || topK,
+            },
+            "rag.retrieve_called",
+          );
 
           const matches = await retrieveRelevantChunks(
             query,
@@ -136,7 +154,6 @@ export function createAgenticRagStream(params: AgenticRagStreamParams) {
               citationNumber,
               citation: `[${citationNumber}]`,
               chunkId: match.id,
-              score: Number(match.score.toFixed(4)),
               documentName: String(match.metadata.document_name || ""),
               sectionPath: String(match.metadata.section_path || ""),
               chunkType: String(match.metadata.chunk_type || ""),
@@ -146,14 +163,9 @@ export function createAgenticRagStream(params: AgenticRagStreamParams) {
           });
 
           retrievedMatches.push(...serializedMatches);
-
           return {
             namespacesUsed: namespacesToUse,
-            context: formatRetrievedContext(
-              matches,
-              1800,
-              citationIndexByChunkId,
-            ),
+            context: formatRetrievedContext(matches, citationIndexByChunkId),
             sources: sourcesWithCitation,
           };
         },
@@ -181,32 +193,20 @@ export function createAgenticRagStream(params: AgenticRagStreamParams) {
       }),
     },
     onStepFinish: (step) => {
-      console.log("[AgenticRAG][Step]", {
-        stepNumber: step.stepNumber,
-        finishReason: step.finishReason,
-        reasoning: step.reasoningText || null,
-        toolCalls: step.toolCalls.map((toolCall) => ({
-          toolName: toolCall.toolName,
-          input: toolCall.input,
-        })),
-        toolResults: step.toolResults.map((toolResult) => ({
-          toolName: toolResult.toolName,
-          outputSummary:
-            typeof toolResult.output === "object" && toolResult.output !== null
-              ? {
-                  namespacesUsed: (
-                    toolResult.output as { namespacesUsed?: string[] }
-                  ).namespacesUsed,
-                  sourceCount: Array.isArray(
-                    (toolResult.output as { sources?: unknown[] }).sources,
-                  )
-                    ? (toolResult.output as { sources?: unknown[] }).sources
-                        ?.length
-                    : 0,
-                }
-              : toolResult.output,
-        })),
-      });
+      log.debug(
+        {
+          stepNumber: step.stepNumber,
+          finishReason: step.finishReason,
+          toolCallCount: step.toolCalls.length,
+          toolNames: step.toolCalls.map((tc) => tc.toolName),
+          sourceCount: step.toolResults.reduce((acc, tr) => {
+            const sources = (tr.output as { sources?: unknown[] } | null)
+              ?.sources;
+            return acc + (Array.isArray(sources) ? sources.length : 0);
+          }, 0),
+        },
+        "rag.step_finished",
+      );
     },
     onFinish: async ({ text }) => {
       const trimmedText = text.trim();
@@ -231,6 +231,9 @@ export function toAgenticEventStreamResponse(
   streamResult: ReturnType<typeof createAgenticRagStream>,
   headers: HeadersInit,
 ) {
+  let hadText = false;
+  let hadQuestion = false;
+
   const eventStream = streamResult.fullStream.pipeThrough(
     new TransformStream({
       transform(chunk, controller) {
@@ -247,6 +250,7 @@ export function toAgenticEventStreamResponse(
 
           case "tool-call": {
             if (chunk.toolName === "ask_user_question") {
+              hadQuestion = true;
               controller.enqueue(
                 formatAgenticEvent({
                   type: "task",
@@ -301,6 +305,7 @@ export function toAgenticEventStreamResponse(
             break;
 
           case "text-delta":
+            hadText = true;
             controller.enqueue(
               formatAgenticEvent({
                 type: "text",
@@ -319,6 +324,16 @@ export function toAgenticEventStreamResponse(
               }),
             );
             break;
+        }
+      },
+      flush(controller) {
+        if (!hadText && !hadQuestion) {
+          controller.enqueue(
+            formatAgenticEvent({
+              type: "text",
+              text: "Saya tidak dapat menemukan informasi tersebut dalam dokumen kebijakan yang tersedia.",
+            }),
+          );
         }
       },
     }),
@@ -351,13 +366,14 @@ export async function generateConversationSummary(
       model,
       system: systemPrompt,
       prompt: userPrompt,
-      temperature: 0.1,
-      topP: 0.9,
+      temperature: DEFAULT_TEMPERATURE,
+      topP: DEFAULT_TOP_P,
     });
 
     const summary = stripSummaryMarkdownArtifacts(text.trim());
     return summary || params.previousSummary || "";
-  } catch {
+  } catch (err) {
+    log.warn({ err }, "rag.summary_generation_failed");
     return params.previousSummary || "";
   }
 }
@@ -370,10 +386,10 @@ export async function generateQuiz(chats: string) {
       model,
       system: systemPrompt,
       prompt: userPrompt,
-      temperature: 0.1,
-      topP: 0.8,
-      presencePenalty: 0,
-      frequencyPenalty: 0,
+      temperature: DEFAULT_TEMPERATURE,
+      topP: DEFAULT_TOP_P,
+      presencePenalty: DEFAULT_PRESENCE_PENALTY,
+      frequencyPenalty: DEFAULT_FREQUENCY_PENALTY,
     });
 
     const sanitizedText = text
@@ -389,6 +405,7 @@ export async function generateQuiz(chats: string) {
 
     return parsedObject.quiz;
   } catch (error) {
+    log.error({ err: error }, "rag.quiz_generation_failed");
     throw new Error(
       `Gagal menghasilkan kuis: ${error instanceof Error ? error.message : "Parsing JSON gagal"}`,
     );

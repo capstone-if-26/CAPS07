@@ -179,15 +179,26 @@ export default function IntentSesiChatPage() {
           .ic-grid { grid-template-columns: 1fr; }
           .analisis-grid { grid-template-columns: 1fr 1fr; }
         }
+        @media (max-width: 640px) {
+          .ic-grid { grid-template-columns: 1fr; gap: 12px; }
+          .ic-card { padding: 16px 14px; overflow: hidden; }
+          .analisis-grid { grid-template-columns: 1fr 1fr; gap: 8px; }
+          .analisis-item { padding: 14px 12px; min-height: 100px; gap: 10px; }
+          .analisis-icon { width: 48px; height: 48px; }
+          .analisis-icon img { width: 48px; height: 48px; }
+          .analisis-label { font-size: 12px; }
+          .analisis-value { font-size: 16px; }
+          .chart-card { padding: 16px 14px; overflow: hidden; }
+        }
         @media (max-width: 480px) {
           .analisis-grid { grid-template-columns: 1fr; }
         }
       `}</style>
 
-      {/* Row 1: Top Intent Table + Bar Chart */}
+      {/* Row 1: Top intent table + Bar chart */}
       <div className="ic-grid">
 
-        {/* Top Intent Table */}
+        {/* Top intent table */}
         <div className="chart-card">
             <div style={{ marginBottom: 16 }}>
               <div style={{ fontSize: 20, fontWeight: 700, color: "#111827", marginBottom: 4 }}>Top Intent</div>
@@ -201,30 +212,32 @@ export default function IntentSesiChatPage() {
                 ))}
               </div>
             ) : (
-              <table style={{
-            width: "100%",
-            borderCollapse: "separate",
-            borderSpacing: 0,
-            border: "1.5px solid #e5e7eb",
-            borderRadius: 12,
-            overflow: "hidden",
-          }}>
-      <thead>
-        <tr>
-          {["Rank", "Intent", "Query", "%", "Trend"].map((h, i) => (
-            <th key={h} style={{
-              padding: "12px 16px",
-              textAlign: "center",
-              fontSize: 13,
-              fontWeight: 600,
-              color: "#374151",
-              background: "#fef2f2",
-              ...(i === 4 ? { borderRight: "none" } : {}),
-            }}>{h}</th>
-          ))}
-        </tr>
-      </thead>
-      <tbody>
+              <div style={{ width: "100%", overflowX: "auto", WebkitOverflowScrolling: "touch" as const }}>
+                <table style={{
+                  width: "100%",
+                  minWidth: 480,
+                  borderCollapse: "separate",
+                  borderSpacing: 0,
+                  border: "1.5px solid #e5e7eb",
+                  borderRadius: 12,
+                  overflow: "hidden",
+                }}>
+                  <thead>
+                    <tr>
+                      {["Rank", "Intent", "Query", "%", "Trend"].map((h, i) => (
+                        <th key={h} style={{
+                          padding: "12px 16px",
+                          textAlign: "center",
+                          fontSize: 13,
+                          fontWeight: 600,
+                          color: "#374151",
+                          background: "#fef2f2",
+                          ...(i === 4 ? { borderRight: "none" } : {}),
+                        }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
         {/* Render dari topIntentsTable (dari API) */}
         {topIntentsTable.length > 0 ? topIntentsTable.map((row) => {
           const avgPct = topIntentsTable.reduce((s, r) => s + r.pct, 0) / Math.max(topIntentsTable.length, 1)
@@ -273,43 +286,45 @@ export default function IntentSesiChatPage() {
         )}
       </tbody>
     </table>
+    </div>
   )}
 </div>
 
-        {/* Bar Chart Top Intent */}
+        {/* Bar chart top intent */}
         <div className="ic-card">
           <div className="ic-card-title">Bar Chart Top Intent</div>
           <div className="ic-card-sub" style={{ marginBottom: 20 }}>&nbsp;</div>
 
               {/* barData dari API*/}
               {loading ? <Skeleton h={260} /> : barData.length > 0 ? (
-                <ResponsiveContainer width="100%" height={320}>
+                <div style={{ width: "100%", overflowX: "auto" }}>
+                <ResponsiveContainer width="100%" minWidth={320} height={320}>
                   <BarChart
                     data={barData}
                     layout="vertical"
-                    margin={{ top: 10, right: 80, left: -2, bottom: 10 }}
+                    margin={{ top: 10, right: 40, left: -2, bottom: 10 }}
                     barCategoryGap="30%"
                   >
                     <XAxis
-                type="number"
-                tick={{ fontSize: 11, fill: "#6b7280", fontWeight: 500 }}
-                tickLine={false}
-                axisLine={{ stroke: "#e5e7eb" }}
-                tickFormatter={(v) => v >= 1000 ? `${(v / 1000).toFixed(0)}K` : String(v)}
-              />
-                    
+                      type="number"
+                      tick={{ fontSize: 11, fill: "#6b7280", fontWeight: 500 }}
+                      tickLine={false}
+                      axisLine={{ stroke: "#e5e7eb" }}
+                      tickFormatter={(v) => v >= 1000 ? `${(v / 1000).toFixed(0)}K` : String(v)}
+                    />
+                          
                     <YAxis
                       type="category"
                       dataKey="name"
-                      width={220}
+                      width={160}
                       tick={{
-                          fontSize: 11,
+                          fontSize: 10,
                           fill: "#374151",
                           fontWeight: 500,
-                          width: 210 }}
-                      tickLine={false}
-                      axisLine={false}
-                    />
+                          width: 150 }}
+                          tickLine={false}
+                          axisLine={false}
+                       />
                     <Tooltip
                       formatter={(v) => [`${Number(v).toLocaleString("id-ID")}`, "Query"]}
                       contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #e5e7eb" }}
@@ -330,6 +345,7 @@ export default function IntentSesiChatPage() {
                     </Bar>
                   </BarChart>
                 </ResponsiveContainer>
+                </div>
               ) : (
                 <div style={{ height: 260, display: "flex", alignItems: "center", justifyContent: "center", color: "#9ca3af", fontSize: 13 }}>
                   Belum ada data
@@ -338,10 +354,10 @@ export default function IntentSesiChatPage() {
         </div>
       </div>
 
-      {/* Row 2: Word Cloud + Analisis Sesi */}
+      {/* Row 2: Word cloud + Analisis sesi */}
       <div className="ic-grid">
 
-        {/* Word Cloud */}
+        {/* Word cloud */}
         <div className="ic-card" style={{ display: "flex", flexDirection: "column" }}>
         <div className="ic-card-title">Word Cloud Pertanyaan</div>
         <div className="ic-card-sub">Free-text queries paling populer</div>
@@ -381,7 +397,7 @@ export default function IntentSesiChatPage() {
         </div>
         </div>
 
-        {/* Analisis Sesi */}
+        {/* Analisis sesi */}
         <div className="ic-card">
           <div className="ic-card-title">Analisis Sesi</div>
           <div className="ic-card-sub"></div>
@@ -389,7 +405,7 @@ export default function IntentSesiChatPage() {
           {loading ? <Skeleton h={200} /> : (
             <div className="analisis-grid">
 
-          {/* Jumlah Sesi Chat */}
+          {/* Jumlah sesi chat */}
           <div className="analisis-item" style={{ background: "#dff4fb" }}>
             <div className="analisis-icon">
               <img src="/jumlah-sesi.png" alt="Jumlah Sesi" />
@@ -409,7 +425,7 @@ export default function IntentSesiChatPage() {
             </div>
           </div>
 
-          {/* Intent Terdeteksi */}
+          {/* Intent terdeteksi */}
           <div className="analisis-item" style={{ background: "#daf4df" }}>
             <div className="analisis-icon">
               <img src="/intent-terdeteksi.png" alt="Intent" />
@@ -429,7 +445,7 @@ export default function IntentSesiChatPage() {
             </div>
           </div>
 
-          {/* Link Kontak — SESUDAH: dari sessionAnalysis.withContact */}
+          {/* Link Kontak */}
           <div className="analisis-item" style={{ background: "#f7f0e8" }}>
             <div className="analisis-icon">
               <img src="/link-kontak.png" alt="Link Kontak" />
@@ -453,7 +469,7 @@ export default function IntentSesiChatPage() {
             </div>
           </div>
 
-          {/* Drop-Off */}
+          {/* Drop-off */}
           <div className="analisis-item" style={{ background: "#f8eeee" }}>
             <div className="analisis-icon">
               <img src="/drop-off.png" alt="Drop Off" />

@@ -252,6 +252,7 @@ export default function Quiz({ chatId, onClose }: QuizProps) {
                           text-[10px] sm:text-[9px] px-2 py-2 rounded-xl border
                           flex items-center gap-1.5
                           transition-all duration-300 select-none
+                          overflow-hidden
                           ${!submitted[qIdx] ? "cursor-pointer hover:shadow-sm" : "cursor-default"}
                           ${getStyle(qIdx, opt)}
                         `}
@@ -265,7 +266,7 @@ export default function Quiz({ chatId, onClose }: QuizProps) {
                             <span className="w-1.5 h-1.5 rounded-full bg-white block" />
                           )}
                         </span>
-                        <span>{opt}</span>
+                        <span className="min-w-0 break-words">{opt}</span>
                       </div>
                     ))}
                 </div>
